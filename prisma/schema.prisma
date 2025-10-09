@@ -1,0 +1,433 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts  Account[]
+  sessions  Session[]
+  character Character?
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Character {
+  id         String   @id @default(cuid())
+  name       String   @unique
+  level      Int      @default(1)
+  experience Int      @default(0)
+  gold       Int      @default(100)
+  reputation Int      @default(0) // -100 to 100, affects NPC prices and player trust
+  health     Int      @default(100)
+  maxHealth  Int      @default(100)
+  attack     Int      @default(10)
+  defense    Int      @default(5)
+  speed      Int      @default(5)
+  perception Int      @default(5) // affects theft detection
+  isOnline   Boolean  @default(false)
+  lastSeen   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Character can be in one party at a time
+  partyId String?
+  party   Party?  @relation("PartyMembers", fields: [partyId], references: [id])
+
+  // Character's inventory
+  inventory Inventory[]
+
+  // Character's transactions (as actor)
+  transactions Transaction[] @relation("TransactionActor")
+
+  // Character's transactions (as target)
+  targetTransactions Transaction[] @relation("TransactionTarget")
+
+  // Character's dungeon turns
+  dungeonTurns DungeonTurn[]
+
+  // Character's party memberships
+  partyMembers PartyMember[]
+
+  // Character's party leadership
+  ledParties Party[] @relation("PartyLeader")
+
+  // Trading relations
+  tradeRequestsSent     TradeRequest[] @relation("TradeRequestFrom")
+  tradeRequestsReceived TradeRequest[] @relation("TradeRequestTo")
+
+  // Bounty relations
+  bountiesPlaced Bounty[] @relation("BountyPlacedBy")
+  bountiesTarget Bounty[] @relation("BountyTarget")
+
+  // Report relations
+  reportsMade    Report[] @relation("ReportReporter")
+  reportsAgainst Report[] @relation("ReportReported")
+
+  @@index([isOnline])
+  @@index([reputation])
+  @@index([gold])
+}
+
+model Mission {
+  id               String   @id @default(cuid())
+  name             String
+  description      String
+  difficulty       Int // 1-5 scale
+  minLevel         Int      @default(1)
+  maxPlayers       Int      @default(5)
+  minPlayers       Int      @default(2)
+  baseReward       Int // base gold reward
+  experienceReward Int      @default(10)
+  isActive         Boolean  @default(true)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  // Relations
+  dungeonSessions DungeonSession[]
+}
+
+model Party {
+  id         String      @id @default(cuid())
+  name       String?
+  isPublic   Boolean     @default(false)
+  maxMembers Int         @default(5)
+  status     PartyStatus @default(FORMING)
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  // Relations
+  leaderId        String
+  leader          Character        @relation("PartyLeader", fields: [leaderId], references: [id])
+  members         PartyMember[]
+  characters      Character[]      @relation("PartyMembers")
+  dungeonSessions DungeonSession[]
+}
+
+model PartyMember {
+  id       String   @id @default(cuid())
+  role     String? // "tank", "dps", "healer", "support"
+  isReady  Boolean  @default(false)
+  joinedAt DateTime @default(now())
+
+  // Relations
+  partyId     String
+  party       Party     @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([partyId, characterId])
+}
+
+model DungeonSession {
+  id            String        @id @default(cuid())
+  status        DungeonStatus @default(WAITING)
+  currentTurn   Int           @default(0)
+  maxTurns      Int           @default(10)
+  turnTimeLimit Int           @default(60) // seconds per turn
+  turnEndsAt    DateTime?
+  startedAt     DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relations
+  missionId String
+  mission   Mission @relation(fields: [missionId], references: [id])
+  partyId   String
+  party     Party   @relation(fields: [partyId], references: [id])
+
+  turns DungeonTurn[]
+  loot  DungeonLoot[]
+}
+
+model DungeonTurn {
+  id          String        @id @default(cuid())
+  turnNumber  Int
+  action      DungeonAction
+  targetId    String? // for targeted actions
+  itemId      String? // for item usage
+  damage      Int? // calculated damage dealt
+  healing     Int? // calculated healing done
+  isResolved  Boolean       @default(false)
+  submittedAt DateTime      @default(now())
+  resolvedAt  DateTime?
+
+  // Relations
+  sessionId   String
+  session     DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character      @relation(fields: [characterId], references: [id])
+
+  @@unique([sessionId, characterId, turnNumber])
+}
+
+model DungeonLoot {
+  id        String    @id @default(cuid())
+  itemId    String
+  quantity  Int       @default(1)
+  claimedBy String? // characterId who claimed it
+  claimedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  // Relations
+  sessionId String
+  session   DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  item      Item           @relation(fields: [itemId], references: [id])
+}
+
+model Item {
+  id          String     @id @default(cuid())
+  name        String
+  description String
+  type        ItemType
+  rarity      ItemRarity @default(COMMON)
+  value       Int // gold value
+  attack      Int? // weapon stats
+  defense     Int? // armor stats
+  healing     Int? // consumable healing amount
+  isTradeable Boolean    @default(true)
+  isStackable Boolean    @default(false)
+  maxStack    Int        @default(1)
+  createdAt   DateTime   @default(now())
+
+  // Relations
+  inventory   Inventory[]
+  dungeonLoot DungeonLoot[]
+  Transaction Transaction[]
+}
+
+model Inventory {
+  id        String   @id @default(cuid())
+  quantity  Int      @default(1)
+  equipped  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  // Relations
+  characterId String
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  itemId      String
+  item        Item      @relation(fields: [itemId], references: [id])
+
+  @@unique([characterId, itemId])
+}
+
+model Transaction {
+  id           String          @id @default(cuid())
+  type         TransactionType
+  amount       Int? // gold amount for trades/thefts
+  description  String
+  metadata     Json? // additional data for complex transactions
+  isSuccessful Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+
+  // Relations
+  actorId  String
+  actor    Character  @relation("TransactionActor", fields: [actorId], references: [id])
+  targetId String?
+  target   Character? @relation("TransactionTarget", fields: [targetId], references: [id])
+  itemId   String?
+  item     Item?      @relation(fields: [itemId], references: [id])
+
+  @@index([actorId])
+  @@index([targetId])
+  @@index([type])
+  @@index([createdAt])
+}
+
+model TradeRequest {
+  id             String      @id @default(cuid())
+  status         TradeStatus @default(PENDING)
+  offeredItems   Json // Array of {itemId, quantity}
+  offeredGold    Int         @default(0)
+  requestedItems Json // Array of {itemId, quantity}
+  requestedGold  Int         @default(0)
+  message        String?
+  createdAt      DateTime    @default(now())
+  acceptedAt     DateTime?
+  completedAt    DateTime?
+
+  // Relations
+  fromCharacterId String
+  fromCharacter   Character @relation("TradeRequestFrom", fields: [fromCharacterId], references: [id])
+  toCharacterId   String
+  toCharacter     Character @relation("TradeRequestTo", fields: [toCharacterId], references: [id])
+
+  @@index([fromCharacterId])
+  @@index([toCharacterId])
+  @@index([status])
+}
+
+model Bounty {
+  id        String       @id @default(cuid())
+  amount    Int
+  reason    String?
+  status    BountyStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  claimedAt DateTime?
+  claimedBy String? // characterId who claimed it
+
+  // Relations
+  placedBy          String
+  placedByCharacter Character @relation("BountyPlacedBy", fields: [placedBy], references: [id])
+  targetId          String
+  targetCharacter   Character @relation("BountyTarget", fields: [targetId], references: [id])
+
+  @@index([status])
+  @@index([amount])
+}
+
+model Report {
+  id          String       @id @default(cuid())
+  reason      ReportReason
+  description String
+  status      ReportStatus @default(PENDING)
+  createdAt   DateTime     @default(now())
+  resolvedAt  DateTime?
+  resolvedBy  String? // admin user ID
+
+  // Relations
+  reporterId String
+  reporter   Character @relation("ReportReporter", fields: [reporterId], references: [id])
+  reportedId String
+  reported   Character @relation("ReportReported", fields: [reportedId], references: [id])
+
+  @@index([status])
+  @@index([reporterId])
+  @@index([reportedId])
+}
+
+// Enums
+enum PartyStatus {
+  FORMING
+  READY
+  IN_DUNGEON
+  COMPLETED
+  DISBANDED
+}
+
+enum DungeonStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+  FAILED
+  ABANDONED
+}
+
+enum DungeonAction {
+  ATTACK
+  DEFEND
+  USE_ITEM
+  FLEE
+  BETRAY
+  WAIT
+}
+
+enum ItemType {
+  WEAPON
+  ARMOR
+  CONSUMABLE
+  MISC
+}
+
+enum ItemRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum TransactionType {
+  TRADE
+  THEFT
+  KILL
+  MISSION_REWARD
+  SHOP_PURCHASE
+  SHOP_SALE
+  GIFT
+  BOUNTY_PAYMENT
+  BOUNTY_PLACED
+  BOUNTY_CLAIMED
+  DUNGEON_LOOT
+}
+
+enum TradeStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum BountyStatus {
+  ACTIVE
+  CLAIMED
+  EXPIRED
+  CANCELLED
+}
+
+enum ReportReason {
+  CHEATING
+  HARASSMENT
+  EXPLOIT
+  OTHER
+}
+
+enum ReportStatus {
+  PENDING
+  INVESTIGATING
+  RESOLVED
+  DISMISSED
+}
