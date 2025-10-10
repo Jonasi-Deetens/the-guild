@@ -92,6 +92,17 @@ export interface ServerToClientEvents {
     amount: number;
     success: boolean;
   }) => void;
+
+  // Character events
+  characterLeveledUp: (data: {
+    newLevel: number;
+    statIncreases: any;
+    totalExperience: number;
+  }) => void;
+  characterExperienceUpdated: (data: {
+    newExperience: number;
+    experienceGained: number;
+  }) => void;
 }
 
 export interface ClientToServerEvents {

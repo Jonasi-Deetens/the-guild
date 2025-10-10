@@ -188,6 +188,12 @@ export default function DungeonPage() {
 
   // WebSocket event listeners
   const lastEvent = useWebSocketStore((state) => state.lastEvent);
+  const levelUpNotification = useWebSocketStore(
+    (state) => state.levelUpNotification
+  );
+  const experienceUpdateNotification = useWebSocketStore(
+    (state) => state.experienceUpdateNotification
+  );
 
   useEffect(() => {
     if (
@@ -220,6 +226,21 @@ export default function DungeonPage() {
     refetchTimeline,
     utils,
   ]);
+
+  // Handle level-up and experience update notifications and invalidate character queries
+  useEffect(() => {
+    if (levelUpNotification || experienceUpdateNotification) {
+      console.log(
+        "🔄 [Dungeon] Invalidating character queries due to notification:",
+        {
+          levelUpNotification,
+          experienceUpdateNotification,
+        }
+      );
+      // Invalidate character query to refresh the UI with updated stats and experience
+      utils.character.getCurrent.invalidate();
+    }
+  }, [levelUpNotification, experienceUpdateNotification, utils]);
 
   // Polling fallback - refetch data every 3 seconds
   useEffect(() => {

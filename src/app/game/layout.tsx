@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -38,11 +38,71 @@ export default function GameLayout({ children }: GameLayoutProps) {
   const { data: character, isLoading: characterLoading } =
     api.character.getCurrent.useQuery();
 
-  // Fetch experience info
-  const { data: experienceInfo } = api.character.getExperienceInfo.useQuery();
+  // Calculate experience info from character data
+  const experienceInfo = character
+    ? (() => {
+        const currentLevel = character.level;
+        const currentExp = character.experience;
 
-  // WebSocket store for level-up notifications
-  const { levelUpNotification, setLevelUpNotification } = useWebSocketStore();
+        // Calculate experience required for current level
+        const currentLevelExp = Math.pow(currentLevel - 1, 2) * 100;
+        const nextLevelExp = Math.pow(currentLevel, 2) * 100;
+        const expToNext = nextLevelExp - currentExp;
+        const expProgress = currentExp - currentLevelExp;
+        const expNeeded = nextLevelExp - currentLevelExp;
+
+        return {
+          currentLevel,
+          currentExperience: currentExp,
+          experienceToNext: expToNext,
+          experienceProgress: expProgress,
+          experienceNeeded: expNeeded,
+          progressPercentage: Math.round((expProgress / expNeeded) * 100),
+        };
+      })()
+    : null;
+
+  // Debug logging for character data
+  useEffect(() => {
+    if (character) {
+      console.log("🎮 [Layout] Character data updated:", {
+        id: character.id,
+        name: character.name,
+        level: character.level,
+        experience: character.experience,
+        gold: character.gold,
+      });
+    }
+  }, [character]);
+
+  useEffect(() => {
+    if (experienceInfo) {
+      console.log("🎮 [Layout] Experience info updated:", experienceInfo);
+    }
+  }, [experienceInfo]);
+
+  // WebSocket store for level-up and experience notifications
+  const {
+    levelUpNotification,
+    setLevelUpNotification,
+    experienceUpdateNotification,
+    setExperienceUpdateNotification,
+  } = useWebSocketStore();
+
+  // tRPC utils for query invalidation
+  const utils = api.useUtils();
+
+  // Handle level-up and experience update notifications and invalidate character queries
+  useEffect(() => {
+    if (levelUpNotification || experienceUpdateNotification) {
+      console.log("🔄 Invalidating character queries due to notification:", {
+        levelUpNotification,
+        experienceUpdateNotification,
+      });
+      // Invalidate character query to refresh the UI with updated stats and experience
+      utils.character.getCurrent.invalidate();
+    }
+  }, [levelUpNotification, experienceUpdateNotification, utils]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">

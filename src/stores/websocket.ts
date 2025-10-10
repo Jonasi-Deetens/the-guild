@@ -42,6 +42,10 @@ interface WebSocketState {
     statIncreases: any;
     totalExperience: number;
   } | null;
+  experienceUpdateNotification: {
+    newExperience: number;
+    experienceGained: number;
+  } | null;
   lastEvent: {
     type: string;
     sessionId?: string;
@@ -113,6 +117,12 @@ interface WebSocketActions {
       totalExperience: number;
     } | null
   ) => void;
+  setExperienceUpdateNotification: (
+    notification: {
+      newExperience: number;
+      experienceGained: number;
+    } | null
+  ) => void;
 }
 
 export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
@@ -126,6 +136,7 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     recentActivity: [],
     currentSession: null,
     levelUpNotification: null,
+    experienceUpdateNotification: null,
     lastEvent: null,
 
     // Actions
@@ -205,6 +216,11 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
       socket.on("characterLeveledUp", (data) => {
         console.log("Character leveled up:", data);
         set({ levelUpNotification: data });
+      });
+
+      socket.on("characterExperienceUpdated", (data) => {
+        console.log("🎯 [WebSocket] Character experience updated:", data);
+        set({ experienceUpdateNotification: data });
       });
 
       socket.on("partyMessage", (data) => {
@@ -340,6 +356,9 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     },
     setLevelUpNotification: (notification) => {
       set({ levelUpNotification: notification });
+    },
+    setExperienceUpdateNotification: (notification) => {
+      set({ experienceUpdateNotification: notification });
     },
   })
 );

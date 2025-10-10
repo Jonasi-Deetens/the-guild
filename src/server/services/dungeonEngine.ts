@@ -475,7 +475,7 @@ export class DungeonEngine {
 
   private calculateDamage(attacker: any, defender: any): number {
     const baseDamage = attacker.attack || 10;
-    const defense = defender.defense || 5;
+    const defense = defender?.defense || 5; // Handle null defender
     const randomFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2 multiplier
 
     const damage = Math.max(
@@ -1226,18 +1226,23 @@ export class DungeonEngine {
       victory: false,
     };
 
+    // Create a mock boss object with defense from event data
+    const boss = {
+      defense: event.eventData?.defense || 8,
+    };
+
     // Process boss fight
     let totalDamage = 0;
     for (const action of event.playerActions) {
       if (action.actionType === "ATTACK") {
-        const damage = this.calculateDamage(action.character, null);
+        const damage = this.calculateDamage(action.character, boss);
         totalDamage += damage;
         results.damage[action.characterId] = damage;
       }
     }
 
     // Check if boss is defeated
-    const bossHealth = event.eventData.health || 100;
+    const bossHealth = event.eventData?.health || 100;
     if (totalDamage >= bossHealth) {
       results.victory = true;
       results.experience = 100;
@@ -1418,13 +1423,30 @@ export class DungeonEngine {
       },
     });
 
-    // Notify player if they leveled up
-    if (leveledUp && wsManager) {
-      wsManager.emitToCharacter(characterId, "characterLeveledUp", {
-        newLevel,
-        statIncreases,
-        totalExperience: newExperience,
-      });
+    // Notify player of experience update (always, not just on level up)
+    if (wsManager) {
+      if (leveledUp) {
+        // Send level-up notification with stat increases
+        wsManager.emitToCharacter(characterId, "characterLeveledUp", {
+          newLevel,
+          statIncreases,
+          totalExperience: newExperience,
+        });
+      } else {
+        // Send experience update notification for non-level-up experience gains
+        console.log(
+          "🎯 [DungeonEngine] Sending experience update notification:",
+          {
+            characterId,
+            newExperience,
+            experienceGained: validExperience,
+          }
+        );
+        wsManager.emitToCharacter(characterId, "characterExperienceUpdated", {
+          newExperience,
+          experienceGained: validExperience,
+        });
+      }
     }
   }
 
