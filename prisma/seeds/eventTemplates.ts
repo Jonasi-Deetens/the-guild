@@ -13,13 +13,19 @@ async function main() {
       description:
         "A group of goblins has set up an ambush in the narrow passage.",
       difficulty: 1,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 120,
         environments: ["cave", "forest", "dungeon"],
         enemyTypes: ["goblin"],
         minEnemies: 2,
         maxEnemies: 4,
+        // Combat clicker specific config
+        monsterCount: 2,
+        monsterHealth: 80,
+        monsterAttack: 8,
+        attackInterval: 4,
+        monsterName: "Goblin",
       },
       outcomes: {
         victory: { experience: 20, gold: 30 },
@@ -33,13 +39,19 @@ async function main() {
       description:
         "Ancient skeletons rise from their graves to defend their tomb.",
       difficulty: 2,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 150,
         environments: ["tomb", "crypt", "ruins"],
         enemyTypes: ["skeleton"],
         minEnemies: 3,
         maxEnemies: 5,
+        // Combat clicker specific config
+        monsterCount: 3,
+        monsterHealth: 100,
+        monsterAttack: 10,
+        attackInterval: 3,
+        monsterName: "Skeleton",
       },
       outcomes: {
         victory: { experience: 40, gold: 60 },
@@ -95,11 +107,12 @@ async function main() {
       name: "Hidden Cache",
       description: "You discover a hidden cache of valuables.",
       difficulty: 1,
-      minigameType: "NONE",
+      minigameType: "LOCK_PICKING",
       config: {
         timeLimit: 60,
         trapChance: 0.2,
         treasureTypes: ["gold", "gems"],
+        lockDifficulty: 1,
       },
       outcomes: {
         success: { gold: 50, experience: 15 },
@@ -302,12 +315,18 @@ async function main() {
       description:
         "The goblin chief stands before you, wielding a crude but deadly weapon.",
       difficulty: 2,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 300,
         bossType: "goblin_chief",
         phases: 2,
         specialAbilities: ["charge", "summon"],
+        // Combat clicker specific config
+        monsterCount: 1,
+        monsterHealth: 200,
+        monsterAttack: 15,
+        attackInterval: 3,
+        monsterName: "Goblin Chief",
       },
       outcomes: {
         victory: { experience: 100, gold: 200, items: ["chiefs_weapon"] },
@@ -320,12 +339,18 @@ async function main() {
       description:
         "An ancient dragon blocks your path, its scales gleaming like precious metals.",
       difficulty: 5,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 600,
         bossType: "dragon",
         phases: 3,
         specialAbilities: ["fire_breath", "fly", "summon", "heal"],
+        // Combat clicker specific config
+        monsterCount: 1,
+        monsterHealth: 500,
+        monsterAttack: 25,
+        attackInterval: 2,
+        monsterName: "Dragon Lord",
       },
       outcomes: {
         victory: { experience: 500, gold: 1000, items: ["dragon_scale_armor"] },
@@ -399,7 +424,7 @@ async function main() {
       name: "Poisonous Gas",
       description: "Toxic gas seeps from cracks in the walls.",
       difficulty: 3,
-      minigameType: "NONE",
+      minigameType: "CLOSING_WALLS",
       config: {
         timeLimit: 90,
         hazardType: "poison_gas",
@@ -438,7 +463,11 @@ async function main() {
       });
       console.log(`✓ Created template: ${template.name}`);
     } else {
-      console.log(`⊘ Template already exists: ${template.name}`);
+      await prisma.eventTemplate.update({
+        where: { id: existing.id },
+        data: template as any,
+      });
+      console.log(`✓ Updated template: ${template.name}`);
     }
   }
 

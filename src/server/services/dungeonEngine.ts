@@ -1097,7 +1097,58 @@ export class DungeonEngine {
       itemsFound: 0,
     };
 
-    // Process each player action
+    // Check if this is a minigame result
+    const minigameAction = event.playerActions.find(
+      (action: any) => action.actionType === "MINIGAME_COMPLETE"
+    );
+
+    if (minigameAction && minigameAction.actionData?.minigameResult) {
+      const minigameResult = minigameAction.actionData.minigameResult;
+
+      // Use minigame results for combat processing
+      results.enemiesDefeated = minigameResult.victory
+        ? event.eventData?.enemies?.length || 1
+        : 0;
+
+      // Distribute experience based on minigame performance
+      const baseExperience = minigameResult.victory ? 50 : 10;
+      const performanceBonus = Math.floor(minigameResult.damageDealt * 0.3);
+      const timeBonus = minigameResult.timeTaken < 30000 ? 20 : 0; // Under 30 seconds
+      const reviveBonus = minigameResult.playersRevived * 15;
+
+      const totalExperience =
+        baseExperience + performanceBonus + timeBonus + reviveBonus;
+
+      // Distribute experience to all participating characters
+      event.playerActions.forEach((action: any) => {
+        if (action.actionType === "MINIGAME_COMPLETE") {
+          results.experience[action.characterId] = totalExperience;
+        }
+      });
+
+      // Distribute damage taken to characters
+      if (minigameResult.damageTaken) {
+        Object.entries(minigameResult.damageTaken).forEach(
+          ([characterId, damage]) => {
+            results.damageTaken[characterId] = damage as number;
+          }
+        );
+      }
+
+      // Add some gold reward for victory
+      if (minigameResult.victory) {
+        event.playerActions.forEach((action: any) => {
+          if (action.actionType === "MINIGAME_COMPLETE") {
+            results.gold[action.characterId] =
+              25 + Math.floor(minigameResult.damageDealt * 0.1);
+          }
+        });
+      }
+
+      return results;
+    }
+
+    // Fallback to original combat processing for non-minigame actions
     for (const action of event.playerActions) {
       if (action.actionType === "ATTACK") {
         // Calculate damage based on character stats and target
@@ -1226,6 +1277,39 @@ export class DungeonEngine {
       victory: false,
     };
 
+    // Check if this is a minigame result
+    const minigameAction = event.playerActions.find(
+      (action: any) => action.actionType === "MINIGAME_COMPLETE"
+    );
+
+    if (minigameAction && minigameAction.actionData?.minigameResult) {
+      const minigameResult = minigameAction.actionData.minigameResult;
+
+      // Use minigame results for boss processing
+      results.victory = minigameResult.victory;
+
+      // Boss gives more experience than regular combat
+      const baseExperience = minigameResult.victory ? 150 : 25;
+      const performanceBonus = Math.floor(minigameResult.damageDealt * 0.5);
+      const timeBonus = minigameResult.timeTaken < 45000 ? 30 : 0; // Under 45 seconds for boss
+      const reviveBonus = minigameResult.playersRevived * 25;
+
+      results.experience =
+        baseExperience + performanceBonus + timeBonus + reviveBonus;
+
+      // Distribute damage taken to characters
+      if (minigameResult.damageTaken) {
+        Object.entries(minigameResult.damageTaken).forEach(
+          ([characterId, damage]) => {
+            results.damage[characterId] = damage as number;
+          }
+        );
+      }
+
+      return results;
+    }
+
+    // Fallback to original boss processing for non-minigame actions
     // Create a mock boss object with defense from event data
     const boss = {
       defense: event.eventData?.defense || 8,

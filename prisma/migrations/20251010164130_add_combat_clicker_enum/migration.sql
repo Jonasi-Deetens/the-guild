@@ -1,0 +1,2 @@
+-- AlterEnum
+ALTER TYPE "MinigameType" ADD VALUE 'COMBAT_CLICKER';

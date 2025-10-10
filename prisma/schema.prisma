@@ -117,7 +117,7 @@ model Character {
 
   // Dungeon event actions
   dungeonActions DungeonPlayerAction[]
-  
+
   // Statistics
   statistics CharacterStatistics?
 
@@ -190,8 +190,8 @@ model DungeonSession {
 
   // New event-based fields
   currentEventId String?
-  timeline       Json?         // Graph structure of events
-  seed           String?       // For reproducible proc-gen
+  timeline       Json? // Graph structure of events
+  seed           String? // For reproducible proc-gen
 
   // Relations
   missionId String
@@ -199,9 +199,9 @@ model DungeonSession {
   partyId   String?
   party     Party?  @relation(fields: [partyId], references: [id])
 
-  turns DungeonTurn[]
-  loot  DungeonLoot[]
-  events DungeonEvent[]
+  turns      DungeonTurn[]
+  loot       DungeonLoot[]
+  events     DungeonEvent[]
   statistics DungeonStatistics?
 }
 
@@ -403,85 +403,85 @@ enum ItemRarity {
 }
 
 model DungeonStatistics {
-  id          String   @id @default(cuid())
-  sessionId   String   @unique
-  session     DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
+  id        String         @id @default(cuid())
+  sessionId String         @unique
+  session   DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
   // Overall stats
-  totalEvents     Int     @default(0)
-  completedEvents Int     @default(0)
-  failedEvents    Int     @default(0)
-  totalTimeSpent  Int     @default(0) // in seconds
-  
+  totalEvents     Int @default(0)
+  completedEvents Int @default(0)
+  failedEvents    Int @default(0)
+  totalTimeSpent  Int @default(0) // in seconds
+
   // Combat stats
-  enemiesDefeated Int     @default(0)
-  damageDealt     Int     @default(0)
-  damageTaken     Int     @default(0)
-  timesFled       Int     @default(0)
-  
+  enemiesDefeated Int @default(0)
+  damageDealt     Int @default(0)
+  damageTaken     Int @default(0)
+  timesFled       Int @default(0)
+
   // Treasure stats
-  goldEarned      Int     @default(0)
-  itemsFound      Int     @default(0)
-  chestsOpened    Int     @default(0)
-  
+  goldEarned   Int @default(0)
+  itemsFound   Int @default(0)
+  chestsOpened Int @default(0)
+
   // Experience stats
-  experienceGained Int    @default(0)
-  levelsGained     Int    @default(0)
-  
+  experienceGained Int @default(0)
+  levelsGained     Int @default(0)
+
   // Event type breakdown
-  combatEvents     Int     @default(0)
-  treasureEvents   Int     @default(0)
-  trapEvents       Int     @default(0)
-  puzzleEvents     Int     @default(0)
-  choiceEvents     Int     @default(0)
-  restEvents       Int     @default(0)
-  bossEvents       Int     @default(0)
-  
+  combatEvents   Int @default(0)
+  treasureEvents Int @default(0)
+  trapEvents     Int @default(0)
+  puzzleEvents   Int @default(0)
+  choiceEvents   Int @default(0)
+  restEvents     Int @default(0)
+  bossEvents     Int @default(0)
+
   // Performance metrics
-  averageEventTime Int     @default(0) // average seconds per event
-  successRate      Float   @default(0) // percentage of successful events
-  efficiency       Float   @default(0) // gold/XP per minute
-  
+  averageEventTime Int   @default(0) // average seconds per event
+  successRate      Float @default(0) // percentage of successful events
+  efficiency       Float @default(0) // gold/XP per minute
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
 
 model CharacterStatistics {
-  id          String   @id @default(cuid())
-  characterId String   @unique
+  id          String    @id @default(cuid())
+  characterId String    @unique
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  
+
   // Lifetime stats
-  totalDungeonsCompleted Int     @default(0)
-  totalDungeonsFailed    Int     @default(0)
-  totalTimeSpent         Int     @default(0) // in seconds
-  totalGoldEarned        Int     @default(0)
-  totalExperienceGained  Int     @default(0)
-  totalLevelsGained      Int     @default(0)
-  
+  totalDungeonsCompleted Int @default(0)
+  totalDungeonsFailed    Int @default(0)
+  totalTimeSpent         Int @default(0) // in seconds
+  totalGoldEarned        Int @default(0)
+  totalExperienceGained  Int @default(0)
+  totalLevelsGained      Int @default(0)
+
   // Combat lifetime stats
-  totalEnemiesDefeated   Int     @default(0)
-  totalDamageDealt       Int     @default(0)
-  totalDamageTaken       Int     @default(0)
-  totalTimesFled         Int     @default(0)
-  
+  totalEnemiesDefeated Int @default(0)
+  totalDamageDealt     Int @default(0)
+  totalDamageTaken     Int @default(0)
+  totalTimesFled       Int @default(0)
+
   // Item stats
-  totalItemsFound        Int     @default(0)
-  totalChestsOpened      Int     @default(0)
-  totalItemsUsed         Int     @default(0)
-  
+  totalItemsFound   Int @default(0)
+  totalChestsOpened Int @default(0)
+  totalItemsUsed    Int @default(0)
+
   // Performance metrics
-  averageDungeonTime     Int     @default(0)
-  successRate            Float   @default(0)
-  averageGoldPerDungeon  Int     @default(0)
-  averageXPPerDungeon    Int     @default(0)
-  
+  averageDungeonTime    Int   @default(0)
+  successRate           Float @default(0)
+  averageGoldPerDungeon Int   @default(0)
+  averageXPPerDungeon   Int   @default(0)
+
   // Records
-  longestDungeonTime     Int     @default(0)
-  mostGoldInDungeon      Int     @default(0)
-  mostXPInDungeon        Int     @default(0)
-  mostEnemiesInDungeon   Int     @default(0)
-  
+  longestDungeonTime   Int @default(0)
+  mostGoldInDungeon    Int @default(0)
+  mostXPInDungeon      Int @default(0)
+  mostEnemiesInDungeon Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -531,42 +531,42 @@ enum ReportStatus {
 
 // New Event System Models
 model EventTemplate {
-  id          String      @id @default(cuid())
-  type        EventType
-  name        String
-  description String
-  difficulty  Int         // 1-5
+  id           String        @id @default(cuid())
+  type         EventType
+  name         String
+  description  String
+  difficulty   Int // 1-5
   minigameType MinigameType?
-  config      Json        // Event-specific configuration
-  outcomes    Json        // Possible outcomes and branches
-  createdAt   DateTime    @default(now())
-  
+  config       Json // Event-specific configuration
+  outcomes     Json // Possible outcomes and branches
+  createdAt    DateTime      @default(now())
+
   dungeonEvents DungeonEvent[]
 }
 
 model DungeonEvent {
-  id            String          @id @default(cuid())
-  sessionId     String
-  session       DungeonSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  
-  templateId    String?
-  template      EventTemplate?  @relation(fields: [templateId], references: [id])
-  
-  eventNumber   Int             // Position in timeline
-  parentEventId String?         // For branching
-  parentEvent   DungeonEvent?   @relation("EventBranches", fields: [parentEventId], references: [id])
-  childEvents   DungeonEvent[]  @relation("EventBranches")
-  
-  status        EventStatus     @default(PENDING)
-  eventData     Json            // Current state, enemy stats, etc.
-  results       Json?           // Outcome data
-  
-  startsAt      DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime        @default(now())
-  
+  id        String         @id @default(cuid())
+  sessionId String
+  session   DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  templateId String?
+  template   EventTemplate? @relation(fields: [templateId], references: [id])
+
+  eventNumber   Int // Position in timeline
+  parentEventId String? // For branching
+  parentEvent   DungeonEvent?  @relation("EventBranches", fields: [parentEventId], references: [id])
+  childEvents   DungeonEvent[] @relation("EventBranches")
+
+  status    EventStatus @default(PENDING)
+  eventData Json // Current state, enemy stats, etc.
+  results   Json? // Outcome data
+
+  startsAt    DateTime?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
   playerActions DungeonPlayerAction[]
-  
+
   @@index([sessionId, eventNumber])
   @@index([parentEventId])
 }
@@ -577,12 +577,12 @@ model DungeonPlayerAction {
   event       DungeonEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   characterId String
   character   Character    @relation(fields: [characterId], references: [id])
-  
-  actionType  String       // Event-specific action
-  actionData  Json         // Action parameters
-  result      Json?        // Calculated result
-  submittedAt DateTime     @default(now())
-  
+
+  actionType  String // Event-specific action
+  actionData  Json // Action parameters
+  result      Json? // Calculated result
+  submittedAt DateTime @default(now())
+
   @@unique([eventId, characterId])
   @@index([characterId])
 }
@@ -601,19 +601,20 @@ enum EventType {
 }
 
 enum MinigameType {
-  JUMPING_GAPS    // Canvas-based platformer
-  CLOSING_WALLS   // Timing game
-  LOCK_PICKING    // Pattern matching
-  RIDDLE          // Text-based
-  QUICK_TIME      // Reaction test
+  JUMPING_GAPS // Canvas-based platformer
+  CLOSING_WALLS // Timing game
+  LOCK_PICKING // Pattern matching
+  RIDDLE // Text-based
+  QUICK_TIME // Reaction test
+  COMBAT_CLICKER // Cookie-clicker style combat
   NONE
 }
 
 enum EventStatus {
-  PENDING       // Not yet reached
-  ACTIVE        // Currently happening
-  WAITING       // Waiting for players
-  RESOLVING     // Processing results
-  COMPLETED     // Finished
-  SKIPPED       // Bypassed via branching
+  PENDING // Not yet reached
+  ACTIVE // Currently happening
+  WAITING // Waiting for players
+  RESOLVING // Processing results
+  COMPLETED // Finished
+  SKIPPED // Bypassed via branching
 }
