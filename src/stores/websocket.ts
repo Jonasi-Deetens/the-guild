@@ -37,6 +37,20 @@ interface WebSocketState {
     timeLimit: number;
     endsAt: string;
   } | null;
+  levelUpNotification: {
+    newLevel: number;
+    statIncreases: any;
+    totalExperience: number;
+  } | null;
+  experienceUpdateNotification: {
+    newExperience: number;
+    experienceGained: number;
+  } | null;
+  lastEvent: {
+    type: string;
+    sessionId?: string;
+    [key: string]: any;
+  } | null;
 }
 
 interface WebSocketActions {
@@ -52,7 +66,11 @@ interface WebSocketActions {
   joinParty: (partyId: string) => void;
   leaveParty: () => void;
   toggleReady: (isReady: boolean) => void;
-  sendPartyMessage: (message: string) => void;
+  sendPartyMessage: (message: {
+    message: string;
+    sender: string;
+    timestamp: string;
+  }) => void;
   submitDungeonAction: (data: {
     sessionId: string;
     action: string;
@@ -92,6 +110,19 @@ interface WebSocketActions {
     timeLimit: number;
     endsAt: string;
   }) => void;
+  setLevelUpNotification: (
+    notification: {
+      newLevel: number;
+      statIncreases: any;
+      totalExperience: number;
+    } | null
+  ) => void;
+  setExperienceUpdateNotification: (
+    notification: {
+      newExperience: number;
+      experienceGained: number;
+    } | null
+  ) => void;
 }
 
 export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
@@ -104,6 +135,9 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     partyChat: [],
     recentActivity: [],
     currentSession: null,
+    levelUpNotification: null,
+    experienceUpdateNotification: null,
+    lastEvent: null,
 
     // Actions
     connect: (characterId: string) => {
@@ -165,9 +199,36 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
         // Handle turn end
       });
 
+      socket.on("eventCompleted", (data) => {
+        console.log("Event completed:", data);
+        // Store the last event for components to subscribe to
+        set({ lastEvent: { type: "eventCompleted", ...data } });
+      });
+
       socket.on("dungeonCompleted", (data) => {
         console.log("Dungeon completed:", data);
-        set({ currentSession: null });
+        set({
+          currentSession: null,
+          lastEvent: { type: "dungeonCompleted", ...data },
+        });
+      });
+
+      socket.on("characterLeveledUp", (data) => {
+        console.log("Character leveled up:", data);
+        set({ levelUpNotification: data });
+      });
+
+      socket.on("characterExperienceUpdated", (data) => {
+        console.log("🎯 [WebSocket] Character experience updated:", data);
+        set({ experienceUpdateNotification: data });
+      });
+
+      socket.on("partyMessage", (data) => {
+        console.log("Party message received:", data);
+        const { partyChat } = get();
+        set({
+          partyChat: [...partyChat, data],
+        });
       });
 
       socket.on("tradeRequest", (data) => {
@@ -238,10 +299,14 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
       }
     },
 
-    sendPartyMessage: (message: string) => {
+    sendPartyMessage: (messageData: {
+      message: string;
+      sender: string;
+      timestamp: string;
+    }) => {
       const { socket } = get();
       if (socket) {
-        socket.emit("sendPartyMessage", message);
+        socket.emit("sendPartyMessage", messageData);
       }
     },
 
@@ -288,6 +353,12 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
 
     updateSession: (session) => {
       set({ currentSession: session });
+    },
+    setLevelUpNotification: (notification) => {
+      set({ levelUpNotification: notification });
+    },
+    setExperienceUpdateNotification: (notification) => {
+      set({ experienceUpdateNotification: notification });
     },
   })
 );

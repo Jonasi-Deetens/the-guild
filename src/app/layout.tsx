@@ -22,7 +22,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <TRPCReactProvider>
           <AuthProvider>
-            <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+            <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
               {children}
             </div>
           </AuthProvider>

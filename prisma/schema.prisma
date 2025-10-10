@@ -115,6 +115,12 @@ model Character {
   reportsMade    Report[] @relation("ReportReporter")
   reportsAgainst Report[] @relation("ReportReported")
 
+  // Dungeon event actions
+  dungeonActions DungeonPlayerAction[]
+  
+  // Statistics
+  statistics CharacterStatistics?
+
   @@index([isOnline])
   @@index([reputation])
   @@index([gold])
@@ -182,14 +188,21 @@ model DungeonSession {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
+  // New event-based fields
+  currentEventId String?
+  timeline       Json?         // Graph structure of events
+  seed           String?       // For reproducible proc-gen
+
   // Relations
   missionId String
   mission   Mission @relation(fields: [missionId], references: [id])
-  partyId   String
-  party     Party   @relation(fields: [partyId], references: [id])
+  partyId   String?
+  party     Party?  @relation(fields: [partyId], references: [id])
 
   turns DungeonTurn[]
   loot  DungeonLoot[]
+  events DungeonEvent[]
+  statistics DungeonStatistics?
 }
 
 model DungeonTurn {
@@ -389,6 +402,90 @@ enum ItemRarity {
   LEGENDARY
 }
 
+model DungeonStatistics {
+  id          String   @id @default(cuid())
+  sessionId   String   @unique
+  session     DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  // Overall stats
+  totalEvents     Int     @default(0)
+  completedEvents Int     @default(0)
+  failedEvents    Int     @default(0)
+  totalTimeSpent  Int     @default(0) // in seconds
+  
+  // Combat stats
+  enemiesDefeated Int     @default(0)
+  damageDealt     Int     @default(0)
+  damageTaken     Int     @default(0)
+  timesFled       Int     @default(0)
+  
+  // Treasure stats
+  goldEarned      Int     @default(0)
+  itemsFound      Int     @default(0)
+  chestsOpened    Int     @default(0)
+  
+  // Experience stats
+  experienceGained Int    @default(0)
+  levelsGained     Int    @default(0)
+  
+  // Event type breakdown
+  combatEvents     Int     @default(0)
+  treasureEvents   Int     @default(0)
+  trapEvents       Int     @default(0)
+  puzzleEvents     Int     @default(0)
+  choiceEvents     Int     @default(0)
+  restEvents       Int     @default(0)
+  bossEvents       Int     @default(0)
+  
+  // Performance metrics
+  averageEventTime Int     @default(0) // average seconds per event
+  successRate      Float   @default(0) // percentage of successful events
+  efficiency       Float   @default(0) // gold/XP per minute
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CharacterStatistics {
+  id          String   @id @default(cuid())
+  characterId String   @unique
+  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  
+  // Lifetime stats
+  totalDungeonsCompleted Int     @default(0)
+  totalDungeonsFailed    Int     @default(0)
+  totalTimeSpent         Int     @default(0) // in seconds
+  totalGoldEarned        Int     @default(0)
+  totalExperienceGained  Int     @default(0)
+  totalLevelsGained      Int     @default(0)
+  
+  // Combat lifetime stats
+  totalEnemiesDefeated   Int     @default(0)
+  totalDamageDealt       Int     @default(0)
+  totalDamageTaken       Int     @default(0)
+  totalTimesFled         Int     @default(0)
+  
+  // Item stats
+  totalItemsFound        Int     @default(0)
+  totalChestsOpened      Int     @default(0)
+  totalItemsUsed         Int     @default(0)
+  
+  // Performance metrics
+  averageDungeonTime     Int     @default(0)
+  successRate            Float   @default(0)
+  averageGoldPerDungeon  Int     @default(0)
+  averageXPPerDungeon    Int     @default(0)
+  
+  // Records
+  longestDungeonTime     Int     @default(0)
+  mostGoldInDungeon      Int     @default(0)
+  mostXPInDungeon        Int     @default(0)
+  mostEnemiesInDungeon   Int     @default(0)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum TransactionType {
   TRADE
   THEFT
@@ -430,4 +527,93 @@ enum ReportStatus {
   INVESTIGATING
   RESOLVED
   DISMISSED
+}
+
+// New Event System Models
+model EventTemplate {
+  id          String      @id @default(cuid())
+  type        EventType
+  name        String
+  description String
+  difficulty  Int         // 1-5
+  minigameType MinigameType?
+  config      Json        // Event-specific configuration
+  outcomes    Json        // Possible outcomes and branches
+  createdAt   DateTime    @default(now())
+  
+  dungeonEvents DungeonEvent[]
+}
+
+model DungeonEvent {
+  id            String          @id @default(cuid())
+  sessionId     String
+  session       DungeonSession  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  templateId    String?
+  template      EventTemplate?  @relation(fields: [templateId], references: [id])
+  
+  eventNumber   Int             // Position in timeline
+  parentEventId String?         // For branching
+  parentEvent   DungeonEvent?   @relation("EventBranches", fields: [parentEventId], references: [id])
+  childEvents   DungeonEvent[]  @relation("EventBranches")
+  
+  status        EventStatus     @default(PENDING)
+  eventData     Json            // Current state, enemy stats, etc.
+  results       Json?           // Outcome data
+  
+  startsAt      DateTime?
+  completedAt   DateTime?
+  createdAt     DateTime        @default(now())
+  
+  playerActions DungeonPlayerAction[]
+  
+  @@index([sessionId, eventNumber])
+  @@index([parentEventId])
+}
+
+model DungeonPlayerAction {
+  id          String       @id @default(cuid())
+  eventId     String
+  event       DungeonEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  characterId String
+  character   Character    @relation(fields: [characterId], references: [id])
+  
+  actionType  String       // Event-specific action
+  actionData  Json         // Action parameters
+  result      Json?        // Calculated result
+  submittedAt DateTime     @default(now())
+  
+  @@unique([eventId, characterId])
+  @@index([characterId])
+}
+
+enum EventType {
+  COMBAT
+  TREASURE
+  TRAP
+  PUZZLE
+  CHOICE
+  REST
+  BOSS
+  BETRAYAL_OPPORTUNITY
+  NPC_ENCOUNTER
+  ENVIRONMENTAL_HAZARD
+}
+
+enum MinigameType {
+  JUMPING_GAPS    // Canvas-based platformer
+  CLOSING_WALLS   // Timing game
+  LOCK_PICKING    // Pattern matching
+  RIDDLE          // Text-based
+  QUICK_TIME      // Reaction test
+  NONE
+}
+
+enum EventStatus {
+  PENDING       // Not yet reached
+  ACTIVE        // Currently happening
+  WAITING       // Waiting for players
+  RESOLVING     // Processing results
+  COMPLETED     // Finished
+  SKIPPED       // Bypassed via branching
 }

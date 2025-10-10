@@ -59,8 +59,12 @@ export default function MissionsPage() {
     api.mission.getAll.useQuery();
   const { data: character, isLoading: characterLoading } =
     api.character.getCurrent.useQuery();
-  const { data: myCurrentParty } = api.party.getMyCurrent.useQuery();
+  const { data: myCurrentParty, refetch: refetchParty } =
+    api.party.getMyCurrent.useQuery();
   const startSessionMutation = api.dungeon.startSession.useMutation();
+  const startSoloSessionMutation = api.dungeon.startSoloSession.useMutation();
+  const leavePartyMutation = api.party.leave.useMutation();
+  const cleanupPartyMutation = api.party.cleanup.useMutation();
 
   // Loading state
   if (missionsLoading || characterLoading) {
@@ -85,63 +89,138 @@ export default function MissionsPage() {
     setStartError("");
   };
 
+  const handleLeaveParty = async () => {
+    try {
+      await leavePartyMutation.mutateAsync();
+      // Refetch party data to update UI
+      await refetchParty();
+      // Also invalidate the query cache to ensure fresh data
+      await api.useUtils().party.getMyCurrent.invalidate();
+    } catch (error) {
+      console.error("Failed to leave party:", error);
+      setStartError(
+        error instanceof Error ? error.message : "Failed to leave party"
+      );
+    }
+  };
+
+  const handleCleanupParty = async () => {
+    try {
+      const result = await cleanupPartyMutation.mutateAsync();
+      if (result.cleaned) {
+        setStartError(`Cleanup successful: ${result.message}`);
+        // Refetch party data to update UI
+        await refetchParty();
+        // Also invalidate the query cache to ensure fresh data
+        await api.useUtils().party.getMyCurrent.invalidate();
+        // Clear error after 3 seconds
+        setTimeout(() => setStartError(""), 3000);
+      } else {
+        setStartError("No cleanup needed - data is consistent");
+        setTimeout(() => setStartError(""), 3000);
+      }
+    } catch (error) {
+      console.error("Failed to cleanup party:", error);
+      setStartError(
+        error instanceof Error ? error.message : "Failed to cleanup party"
+      );
+    }
+  };
+
   const handleStartMission = async () => {
-    if (!selectedMission || !character || !myCurrentParty) return;
+    if (!selectedMission || !character) return;
 
     setStartError("");
 
-    // Validation
-    if (!myCurrentParty) {
-      setStartError("You need to be in a party to start this mission");
-      return;
-    }
+    // Check if this is a solo mission
+    const isSoloMission =
+      selectedMission.minPlayers === 1 && selectedMission.maxPlayers === 1;
 
-    if (myCurrentParty.leaderId !== character.id) {
-      setStartError("Only the party leader can start missions");
-      return;
-    }
+    if (isSoloMission) {
+      // Solo mission logic
+      if (character.level < selectedMission.minLevel) {
+        setStartError(
+          `You need to be level ${selectedMission.minLevel} (currently level ${character.level})`
+        );
+        return;
+      }
 
-    const partySize = myCurrentParty.members?.length || 0;
-    if (partySize < selectedMission.minPlayers) {
-      setStartError(
-        `Your party needs at least ${selectedMission.minPlayers} members (currently ${partySize})`
-      );
-      return;
-    }
+      if (myCurrentParty) {
+        setStartError(
+          "You cannot start a solo mission while in a party. Leave your party first."
+        );
+        return;
+      }
 
-    if (partySize > selectedMission.maxPlayers) {
-      setStartError(
-        `Your party has too many members for this mission (max ${selectedMission.maxPlayers})`
-      );
-      return;
-    }
+      try {
+        const session = await startSoloSessionMutation.mutateAsync({
+          missionId: selectedMission.id,
+        });
 
-    const allReady = myCurrentParty.members?.every((m) => m.isReady);
-    if (!allReady) {
-      setStartError("Not all party members are ready");
-      return;
-    }
+        // Success! Redirect to dungeon
+        router.push(`/game/dungeon/${session.sessionId}`);
+      } catch (error) {
+        console.error("Failed to start solo mission:", error);
+        setStartError(
+          error instanceof Error
+            ? error.message
+            : "Failed to start solo mission"
+        );
+      }
+    } else {
+      // Party mission logic
+      if (!myCurrentParty) {
+        setStartError("You need to be in a party to start this mission");
+        return;
+      }
 
-    if (character.level < selectedMission.minLevel) {
-      setStartError(
-        `You need to be level ${selectedMission.minLevel} (currently level ${character.level})`
-      );
-      return;
-    }
+      if (myCurrentParty.leaderId !== character.id) {
+        setStartError("Only the party leader can start missions");
+        return;
+      }
 
-    try {
-      const session = await startSessionMutation.mutateAsync({
-        missionId: selectedMission.id,
-        partyId: myCurrentParty.id,
-      });
+      const partySize = myCurrentParty.members?.length || 0;
+      if (partySize < selectedMission.minPlayers) {
+        setStartError(
+          `Your party needs at least ${selectedMission.minPlayers} members (currently ${partySize})`
+        );
+        return;
+      }
 
-      // Success! Redirect to dungeon
-      router.push(`/game/dungeon/${session.id}`);
-    } catch (error) {
-      console.error("Failed to start mission:", error);
-      setStartError(
-        error instanceof Error ? error.message : "Failed to start mission"
-      );
+      if (partySize > selectedMission.maxPlayers) {
+        setStartError(
+          `Your party has too many members for this mission (max ${selectedMission.maxPlayers})`
+        );
+        return;
+      }
+
+      const allReady = myCurrentParty.members?.every((m) => m.isReady);
+      if (!allReady) {
+        setStartError("Not all party members are ready");
+        return;
+      }
+
+      if (character.level < selectedMission.minLevel) {
+        setStartError(
+          `You need to be level ${selectedMission.minLevel} (currently level ${character.level})`
+        );
+        return;
+      }
+
+      try {
+        const session = await startSessionMutation.mutateAsync({
+          missionId: selectedMission.id,
+          partyId: myCurrentParty.id,
+        });
+
+        // Success! Redirect to dungeon
+        router.push(`/game/dungeon/${session.id}`);
+      } catch (error) {
+        console.error("Failed to start mission:", error);
+        setStartError(
+          error instanceof Error ? error.message : "Failed to start mission"
+        );
+      }
     }
   };
 
@@ -292,8 +371,16 @@ export default function MissionsPage() {
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Players:</span>
-                    <span className="text-white">
-                      {mission.minPlayers}-{mission.maxPlayers}
+                    <span
+                      className={`${
+                        mission.minPlayers === 1 && mission.maxPlayers === 1
+                          ? "text-blue-400 font-semibold"
+                          : "text-white"
+                      }`}
+                    >
+                      {mission.minPlayers === 1 && mission.maxPlayers === 1
+                        ? "Solo"
+                        : `${mission.minPlayers}-${mission.maxPlayers}`}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
@@ -456,8 +543,18 @@ export default function MissionsPage() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50">
                   <span className="text-sm text-gray-400">Players:</span>
-                  <span className="text-white font-medium">
-                    {selectedMission.minPlayers}-{selectedMission.maxPlayers}
+                  <span
+                    className={`font-medium ${
+                      selectedMission.minPlayers === 1 &&
+                      selectedMission.maxPlayers === 1
+                        ? "text-blue-400"
+                        : "text-white"
+                    }`}
+                  >
+                    {selectedMission.minPlayers === 1 &&
+                    selectedMission.maxPlayers === 1
+                      ? "Solo"
+                      : `${selectedMission.minPlayers}-${selectedMission.maxPlayers}`}
                   </span>
                 </div>
                 <div className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50">
@@ -530,6 +627,30 @@ export default function MissionsPage() {
                         </div>
                       )}
                     </div>
+                    <div className="pt-2 space-y-2">
+                      <Button
+                        onClick={handleLeaveParty}
+                        disabled={leavePartyMutation.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-red-400 border-red-400 hover:bg-red-400 hover:text-white"
+                      >
+                        {leavePartyMutation.isPending
+                          ? "Leaving..."
+                          : "Leave Party"}
+                      </Button>
+                      <Button
+                        onClick={handleCleanupParty}
+                        disabled={cleanupPartyMutation.isPending}
+                        variant="outline"
+                        size="sm"
+                        className="w-full text-yellow-400 border-yellow-400 hover:bg-yellow-400 hover:text-black"
+                      >
+                        {cleanupPartyMutation.isPending
+                          ? "Cleaning..."
+                          : "Cleanup Data"}
+                      </Button>
+                    </div>
                   </>
                 )}
               </div>
@@ -558,13 +679,16 @@ export default function MissionsPage() {
               <Button
                 onClick={handleStartMission}
                 disabled={
-                  !myCurrentParty ||
-                  myCurrentParty.leaderId !== character?.id ||
-                  startSessionMutation.isPending
+                  (selectedMission.minPlayers > 1 && !myCurrentParty) ||
+                  (selectedMission.minPlayers > 1 &&
+                    myCurrentParty.leaderId !== character?.id) ||
+                  startSessionMutation.isPending ||
+                  startSoloSessionMutation.isPending
                 }
                 className="flex-1"
               >
-                {startSessionMutation.isPending ? (
+                {startSessionMutation.isPending ||
+                startSoloSessionMutation.isPending ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
                     Starting...
@@ -572,7 +696,10 @@ export default function MissionsPage() {
                 ) : (
                   <>
                     <Sword className="h-4 w-4 mr-2" />
-                    Start Mission
+                    {selectedMission.minPlayers === 1 &&
+                    selectedMission.maxPlayers === 1
+                      ? "Start Solo Mission"
+                      : "Start Mission"}
                   </>
                 )}
               </Button>

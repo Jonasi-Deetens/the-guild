@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -16,7 +16,14 @@ import {
   Heart,
   Star,
   Menu,
+  Package,
+  BarChart3,
 } from "@/components/icons";
+import { api } from "@/trpc/react";
+import { LevelUpNotification } from "@/components/game/LevelUpNotification";
+import { Inventory } from "@/components/game/Inventory";
+import { StatisticsPanel } from "@/components/game/StatisticsPanel";
+import { useWebSocketStore } from "@/stores/websocket";
 
 interface GameLayoutProps {
   children: React.ReactNode;
@@ -24,74 +31,176 @@ interface GameLayoutProps {
 
 export default function GameLayout({ children }: GameLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [inventoryOpen, setInventoryOpen] = useState(false);
+  const [statisticsOpen, setStatisticsOpen] = useState(false);
 
-  // Mock character data - will be replaced with real data from tRPC
-  const character = {
-    name: "TestPlayer",
-    level: 5,
-    gold: 1250,
-    health: 85,
-    maxHealth: 100,
-    reputation: 15,
-  };
+  // Fetch real character data
+  const { data: character, isLoading: characterLoading } =
+    api.character.getCurrent.useQuery();
+
+  // Calculate experience info from character data
+  const experienceInfo = character
+    ? (() => {
+        const currentLevel = character.level;
+        const currentExp = character.experience;
+
+        // Calculate experience required for current level
+        const currentLevelExp = Math.pow(currentLevel - 1, 2) * 100;
+        const nextLevelExp = Math.pow(currentLevel, 2) * 100;
+        const expToNext = nextLevelExp - currentExp;
+        const expProgress = currentExp - currentLevelExp;
+        const expNeeded = nextLevelExp - currentLevelExp;
+
+        return {
+          currentLevel,
+          currentExperience: currentExp,
+          experienceToNext: expToNext,
+          experienceProgress: expProgress,
+          experienceNeeded: expNeeded,
+          progressPercentage: Math.round((expProgress / expNeeded) * 100),
+        };
+      })()
+    : null;
+
+  // Debug logging for character data
+  useEffect(() => {
+    if (character) {
+      console.log("🎮 [Layout] Character data updated:", {
+        id: character.id,
+        name: character.name,
+        level: character.level,
+        experience: character.experience,
+        gold: character.gold,
+      });
+    }
+  }, [character]);
+
+  useEffect(() => {
+    if (experienceInfo) {
+      console.log("🎮 [Layout] Experience info updated:", experienceInfo);
+    }
+  }, [experienceInfo]);
+
+  // WebSocket store for level-up and experience notifications
+  const {
+    levelUpNotification,
+    setLevelUpNotification,
+    experienceUpdateNotification,
+    setExperienceUpdateNotification,
+  } = useWebSocketStore();
+
+  // tRPC utils for query invalidation
+  const utils = api.useUtils();
+
+  // Handle level-up and experience update notifications and invalidate character queries
+  useEffect(() => {
+    if (levelUpNotification || experienceUpdateNotification) {
+      console.log("🔄 Invalidating character queries due to notification:", {
+        levelUpNotification,
+        experienceUpdateNotification,
+      });
+      // Invalidate character query to refresh the UI with updated stats and experience
+      utils.character.getCurrent.invalidate();
+    }
+  }, [levelUpNotification, experienceUpdateNotification, utils]);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+    <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
       {/* Sidebar */}
       <div
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-gray-900/95 backdrop-blur-sm border-r border-gray-700/50 transform transition-transform duration-300 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-stone-900/95 backdrop-blur-sm border-r border-amber-900/30 shadow-2xl transform transition-transform duration-300 ${
           sidebarOpen ? "translate-x-0" : "-translate-x-full"
         } lg:translate-x-0`}
       >
         <div className="flex flex-col h-full">
           {/* Header */}
-          <div className="p-6 border-b border-gray-700/50">
+          <div className="p-6 border-b border-amber-900/30 bg-gradient-to-r from-burgundy-900/20 to-transparent">
             <h1 className="text-2xl font-bold text-white flex items-center">
-              <Crown className="h-6 w-6 text-purple-400 mr-2" />
+              <Crown className="h-6 w-6 text-amber-500 mr-2" />
               The Guild
             </h1>
           </div>
 
           {/* Character Stats */}
-          <div className="p-4 border-b border-gray-700/50">
+          <div className="p-4 border-b border-amber-900/30">
             <Card className="glass">
               <CardContent className="p-4">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Level</span>
-                    <span className="text-sm font-semibold text-white">
-                      {character.level}
-                    </span>
+                {characterLoading ? (
+                  <div className="space-y-3">
+                    <div className="animate-pulse">
+                      <div className="h-4 bg-stone-700 rounded w-3/4 mb-2"></div>
+                      <div className="h-4 bg-stone-700 rounded w-1/2 mb-2"></div>
+                      <div className="h-4 bg-stone-700 rounded w-2/3 mb-2"></div>
+                      <div className="h-4 bg-stone-700 rounded w-1/2"></div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Gold</span>
-                    <span className="text-sm font-semibold text-yellow-400 flex items-center">
-                      <Coins className="h-4 w-4 mr-1" />
-                      {character.gold}
-                    </span>
+                ) : character ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-stone-300">Level</span>
+                      <span className="text-sm font-semibold text-white">
+                        {character.level}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-stone-300">Gold</span>
+                      <span className="text-sm font-semibold text-yellow-400 flex items-center">
+                        <Coins className="h-4 w-4 mr-1" />
+                        {character.gold}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-stone-300">Health</span>
+                      <span className="text-sm font-semibold text-red-400 flex items-center">
+                        <Heart className="h-4 w-4 mr-1" />
+                        {character.health}/{character.maxHealth}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-stone-300">Reputation</span>
+                      <span
+                        className={`text-sm font-semibold flex items-center ${
+                          character.reputation >= 0
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }`}
+                      >
+                        <Star className="h-4 w-4 mr-1" />
+                        {character.reputation > 0 ? "+" : ""}
+                        {character.reputation}
+                      </span>
+                    </div>
+                    {experienceInfo && (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-stone-300">
+                            Experience
+                          </span>
+                          <span className="text-sm font-semibold text-yellow-400">
+                            {experienceInfo.experienceProgress}/
+                            {experienceInfo.experienceNeeded}
+                          </span>
+                        </div>
+                        <div className="w-full bg-stone-700 rounded-full h-2">
+                          <div
+                            className="bg-gradient-to-r from-yellow-500 to-yellow-400 h-2 rounded-full transition-all duration-300"
+                            style={{
+                              width: `${experienceInfo.progressPercentage}%`,
+                            }}
+                          />
+                        </div>
+                        <div className="text-xs text-stone-400 text-center">
+                          {experienceInfo.experienceToNext} XP to Level{" "}
+                          {experienceInfo.currentLevel + 1}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Health</span>
-                    <span className="text-sm font-semibold text-red-400 flex items-center">
-                      <Heart className="h-4 w-4 mr-1" />
-                      {character.health}/{character.maxHealth}
-                    </span>
+                ) : (
+                  <div className="text-center text-stone-400 text-sm">
+                    No character found
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-gray-300">Reputation</span>
-                    <span
-                      className={`text-sm font-semibold flex items-center ${
-                        character.reputation >= 0
-                          ? "text-green-400"
-                          : "text-red-400"
-                      }`}
-                    >
-                      <Star className="h-4 w-4 mr-1" />
-                      {character.reputation > 0 ? "+" : ""}
-                      {character.reputation}
-                    </span>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -116,6 +225,22 @@ export default function GameLayout({ children }: GameLayoutProps) {
                 Missions
               </Button>
             </Link>
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => setInventoryOpen(true)}
+            >
+              <Package className="h-4 w-4 mr-2" />
+              Inventory
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full justify-start"
+              onClick={() => setStatisticsOpen(true)}
+            >
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Statistics
+            </Button>
             <Link href="/game/profile">
               <Button variant="ghost" className="w-full justify-start">
                 <User className="h-4 w-4 mr-2" />
@@ -125,7 +250,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
           </nav>
 
           {/* Footer */}
-          <div className="p-4 border-t border-gray-700/50">
+          <div className="p-4 border-t border-amber-900/30">
             <div className="space-y-2">
               <Button variant="ghost" className="w-full justify-start">
                 <Settings className="h-4 w-4 mr-2" />
@@ -154,7 +279,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
       {/* Main content */}
       <div className="lg:ml-64">
         {/* Top bar */}
-        <div className="bg-gray-900/50 backdrop-blur-sm border-b border-gray-700/50 p-4">
+        <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -165,12 +290,25 @@ export default function GameLayout({ children }: GameLayoutProps) {
               <Menu className="h-5 w-5" />
             </Button>
             <div className="flex items-center space-x-4">
-              <span className="text-white font-semibold">{character.name}</span>
-              <div className="flex items-center space-x-2 text-sm text-gray-300">
-                <span>Lv.{character.level}</span>
-                <span>•</span>
-                <span className="text-yellow-400">{character.gold}g</span>
-              </div>
+              {characterLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="h-4 w-20 bg-stone-700 rounded animate-pulse"></div>
+                  <div className="h-4 w-16 bg-stone-700 rounded animate-pulse"></div>
+                </div>
+              ) : character ? (
+                <>
+                  <span className="text-white font-semibold">
+                    {character.name}
+                  </span>
+                  <div className="flex items-center space-x-2 text-sm text-stone-300">
+                    <span>Lv.{character.level}</span>
+                    <span>•</span>
+                    <span className="text-yellow-400">{character.gold}g</span>
+                  </div>
+                </>
+              ) : (
+                <span className="text-stone-400 text-sm">No character</span>
+              )}
             </div>
           </div>
         </div>
@@ -178,6 +316,24 @@ export default function GameLayout({ children }: GameLayoutProps) {
         {/* Page content */}
         <main className="p-6">{children}</main>
       </div>
+
+      {/* Level Up Notification */}
+      <LevelUpNotification
+        notification={levelUpNotification}
+        onClose={() => setLevelUpNotification(null)}
+      />
+
+      {/* Inventory Modal */}
+      <Inventory
+        isOpen={inventoryOpen}
+        onClose={() => setInventoryOpen(false)}
+      />
+
+      {/* Statistics Panel */}
+      <StatisticsPanel
+        isOpen={statisticsOpen}
+        onClose={() => setStatisticsOpen(false)}
+      />
     </div>
   );
 }
