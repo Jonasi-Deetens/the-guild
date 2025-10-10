@@ -7,6 +7,57 @@ import {
 import { dungeonEngine } from "@/server/services/dungeonEngine";
 
 export const dungeonRouter = createTRPCRouter({
+  // Start a solo dungeon session
+  startSoloSession: protectedProcedure
+    .input(
+      z.object({
+        missionId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Get current character
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is already in a party
+      if (character.partyId) {
+        throw new Error("Character is already in a party");
+      }
+
+      // Get mission details
+      const mission = await ctx.db.mission.findUnique({
+        where: { id: input.missionId },
+      });
+
+      if (!mission) {
+        throw new Error("Mission not found");
+      }
+
+      // Check if mission allows solo play (minPlayers = 1)
+      if (mission.minPlayers > 1) {
+        throw new Error("This mission requires multiple players");
+      }
+
+      // Create a solo dungeon session
+      const session = await ctx.db.dungeonSession.create({
+        data: {
+          missionId: input.missionId,
+          status: "WAITING",
+          partyId: null, // No party for solo
+        },
+      });
+
+      // Start the solo dungeon
+      await dungeonEngine.startSoloDungeon(session.id, character.id);
+
+      return { sessionId: session.id };
+    }),
+
   // Start a dungeon session
   startSession: protectedProcedure
     .input(
@@ -118,7 +169,7 @@ export const dungeonRouter = createTRPCRouter({
   getSession: publicProcedure
     .input(z.object({ sessionId: z.string() }))
     .query(async ({ ctx, input }) => {
-      return await ctx.db.dungeonSession.findUnique({
+      const session = await ctx.db.dungeonSession.findUnique({
         where: { id: input.sessionId },
         include: {
           mission: true,
@@ -142,8 +193,38 @@ export const dungeonRouter = createTRPCRouter({
               item: true,
             },
           },
+          events: {
+            include: {
+              playerActions: {
+                include: {
+                  character: true,
+                },
+              },
+            },
+          },
         },
       });
+
+      // For solo missions, we need to get the character data from the events
+      if (session && !session.party && session.events.length > 0) {
+        const characterActions = session.events
+          .flatMap((event) => event.playerActions)
+          .map((action) => action.character);
+
+        // Create a mock party structure for solo missions
+        const soloCharacter = characterActions[0];
+        if (soloCharacter) {
+          (session as any).party = {
+            members: [
+              {
+                character: soloCharacter,
+              },
+            ],
+          };
+        }
+      }
+
+      return session;
     }),
 
   // Get active sessions for a character

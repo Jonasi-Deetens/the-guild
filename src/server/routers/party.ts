@@ -99,8 +99,28 @@ export const partyRouter = createTRPCRouter({
       return null;
     }
 
+    // Check if character is actually a member of the party
+    const partyMember = await ctx.db.partyMember.findUnique({
+      where: {
+        partyId_characterId: {
+          partyId: character.partyId,
+          characterId: character.id,
+        },
+      },
+    });
+
+    if (!partyMember) {
+      // Character has partyId but is not actually a member - clean up
+      console.log(`Cleaning up orphaned partyId for character ${character.id}`);
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: { partyId: null },
+      });
+      return null;
+    }
+
     // Get the party with full details
-    return await ctx.db.party.findUnique({
+    const party = await ctx.db.party.findUnique({
       where: { id: character.partyId },
       include: {
         leader: {
@@ -125,6 +145,20 @@ export const partyRouter = createTRPCRouter({
         },
       },
     });
+
+    // Double-check that the party exists and is not disbanded
+    if (!party || party.status === "DISBANDED") {
+      console.log(
+        `Party ${character.partyId} not found or disbanded, cleaning up character ${character.id}`
+      );
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: { partyId: null },
+      });
+      return null;
+    }
+
+    return party;
   }),
 
   // Create new party
@@ -268,7 +302,33 @@ export const partyRouter = createTRPCRouter({
     }
 
     if (!character.partyId) {
-      throw new Error("Character is not in a party");
+      // Character is not in a party - this is fine, just return success
+      return { success: true, message: "Character is not in a party" };
+    }
+
+    // Verify character is actually a member
+    const partyMember = await ctx.db.partyMember.findUnique({
+      where: {
+        partyId_characterId: {
+          partyId: character.partyId,
+          characterId: character.id,
+        },
+      },
+    });
+
+    if (!partyMember) {
+      // Character has partyId but is not actually a member - clean up and return
+      console.log(
+        `Character ${character.id} has partyId ${character.partyId} but is not a member, cleaning up`
+      );
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: { partyId: null },
+      });
+      return {
+        success: true,
+        message: "Left party (was not actually a member)",
+      };
     }
 
     // If character is the leader, disband the party
@@ -294,6 +354,57 @@ export const partyRouter = createTRPCRouter({
     });
 
     return { success: true };
+  }),
+
+  // Clean up party data inconsistencies (for debugging)
+  cleanup: protectedProcedure.mutation(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    let cleaned = false;
+    let message = "No cleanup needed";
+
+    // Check if character has partyId but is not actually a member
+    if (character.partyId) {
+      const partyMember = await ctx.db.partyMember.findUnique({
+        where: {
+          partyId_characterId: {
+            partyId: character.partyId,
+            characterId: character.id,
+          },
+        },
+      });
+
+      if (!partyMember) {
+        await ctx.db.character.update({
+          where: { id: character.id },
+          data: { partyId: null },
+        });
+        cleaned = true;
+        message = "Removed orphaned partyId";
+      } else {
+        // Check if party exists and is not disbanded
+        const party = await ctx.db.party.findUnique({
+          where: { id: character.partyId },
+        });
+
+        if (!party || party.status === "DISBANDED") {
+          await ctx.db.character.update({
+            where: { id: character.id },
+            data: { partyId: null },
+          });
+          cleaned = true;
+          message = "Removed reference to non-existent/disbanded party";
+        }
+      }
+    }
+
+    return { success: true, cleaned, message };
   }),
 
   // Toggle ready status

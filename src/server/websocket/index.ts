@@ -40,6 +40,8 @@ export interface ServerToClientEvents {
     sessionId: string;
     missionName: string;
     turnTimeLimit: number;
+    timeline?: any;
+    currentEvent?: any;
   }) => void;
   turnStarted: (data: {
     sessionId: string;
@@ -53,6 +55,25 @@ export interface ServerToClientEvents {
     success: boolean;
     loot: any[];
   }) => void;
+
+  // New event-based dungeon events
+  eventStarted: (data: {
+    eventId: string;
+    type: string;
+    data: any;
+    timeLimit: number;
+    endsAt: number;
+  }) => void;
+
+  playerActed: (data: {
+    eventId: string;
+    characterId: string;
+    actionsRemaining: number;
+  }) => void;
+
+  eventCompleted: (data: { eventId: string; results: any }) => void;
+
+  timelineUpdated: (data: { timeline: any; currentEventId: string }) => void;
 
   // Trade events
   tradeRequest: (data: {
@@ -87,7 +108,11 @@ export interface ClientToServerEvents {
   joinParty: (partyId: string) => void;
   leaveParty: () => void;
   toggleReady: (isReady: boolean) => void;
-  sendPartyMessage: (message: string) => void;
+  sendPartyMessage: (messageData: {
+    message: string;
+    sender: string;
+    timestamp: string;
+  }) => void;
 
   // Dungeon events
   submitAction: (data: {
@@ -95,6 +120,13 @@ export interface ClientToServerEvents {
     action: string;
     targetId?: string;
     itemId?: string;
+  }) => void;
+
+  // New event-based dungeon events
+  submitEventAction: (data: {
+    eventId: string;
+    actionType: string;
+    actionData: any;
   }) => void;
 
   // Trade events
@@ -169,6 +201,9 @@ export class WebSocketManager {
 
           socket.data.characterId = characterId;
           this.connectedPlayers.set(characterId, socket.id);
+
+          // Join character-specific room for solo dungeons
+          socket.join(`character:${characterId}`);
 
           // Update character online status
           await db.character.update({
@@ -362,7 +397,7 @@ export class WebSocketManager {
         }
       });
 
-      socket.on("sendPartyMessage", async (message) => {
+      socket.on("sendPartyMessage", async (messageData) => {
         if (!socket.data.partyId || !socket.data.characterId) {
           socket.emit("error", { message: "Not in a party" });
           return;
@@ -379,9 +414,9 @@ export class WebSocketManager {
         }
 
         const chatData = {
-          message,
-          sender: character.name,
-          timestamp: new Date().toISOString(),
+          message: messageData.message,
+          sender: messageData.sender || character.name,
+          timestamp: messageData.timestamp || new Date().toISOString(),
         };
 
         socket.to(`party:${socket.data.partyId}`).emit("partyChat", chatData);
@@ -427,6 +462,10 @@ export class WebSocketManager {
   // Public methods for external use
   public emitToParty(partyId: string, event: string, data: any) {
     this.io.to(`party:${partyId}`).emit(event as any, data);
+  }
+
+  public emitToCharacter(characterId: string, event: string, data: any) {
+    this.io.to(`character:${characterId}`).emit(event as any, data);
   }
 
   public emitToHub(event: string, data: any) {

@@ -95,5 +95,9 @@ export {
   LogOut,
   Trophy,
   Handshake,
+  Package,
+  Send,
+  BarChart3,
+  Puzzle,
   type LucideIcon,
 } from "lucide-react";

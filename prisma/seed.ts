@@ -8,6 +8,30 @@ async function main() {
   // Create missions
   const missions = [
     {
+      name: "Solo Training Ground",
+      description:
+        "A safe training area for adventurers to practice their skills alone. Perfect for testing your abilities!",
+      difficulty: 1,
+      minLevel: 1,
+      maxPlayers: 1,
+      minPlayers: 1,
+      baseReward: 50,
+      experienceReward: 20,
+      isActive: true,
+    },
+    {
+      name: "Lone Wolf's Challenge",
+      description:
+        "A series of challenges designed for solo adventurers. Test your mettle against various obstacles and enemies.",
+      difficulty: 2,
+      minLevel: 2,
+      maxPlayers: 1,
+      minPlayers: 1,
+      baseReward: 100,
+      experienceReward: 40,
+      isActive: true,
+    },
+    {
       name: "Slime Den",
       description:
         "A den of weak slimes has been discovered near the village. Clear them out for some easy experience and gold. Perfect for beginners!",

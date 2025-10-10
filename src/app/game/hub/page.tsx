@@ -25,6 +25,7 @@ import {
   Zap,
   AlertTriangle,
   XCircle,
+  Package,
 } from "@/components/icons";
 import PlayerInteractionMenu from "@/components/game/PlayerInteractionMenu";
 import { api } from "@/trpc/react";
@@ -47,50 +48,14 @@ export default function HubPage() {
   const leavePartyMutation = api.party.leave.useMutation();
   const { data: myCurrentParty, refetch: refetchMyParty } =
     api.party.getMyCurrent.useQuery();
+  const { data: character } = api.character.getCurrent.useQuery();
+  const { data: onlinePlayers = [], isLoading: playersLoading } =
+    api.character.getOnline.useQuery();
 
-  // Mock data - will be replaced with real data from tRPC
-  const onlinePlayers = [
-    {
-      id: "1",
-      name: "ShadowThief",
-      level: 8,
-      reputation: -25,
-      gold: 500,
-      isOnline: true,
-    },
-    {
-      id: "2",
-      name: "HolyPaladin",
-      level: 12,
-      reputation: 45,
-      gold: 1200,
-      isOnline: true,
-    },
-    {
-      id: "3",
-      name: "MerchantKing",
-      level: 6,
-      reputation: 15,
-      gold: 2500,
-      isOnline: true,
-    },
-    {
-      id: "4",
-      name: "DungeonMaster",
-      level: 15,
-      reputation: 60,
-      gold: 800,
-      isOnline: true,
-    },
-    {
-      id: "5",
-      name: "LoneWolf",
-      level: 10,
-      reputation: 0,
-      gold: 750,
-      isOnline: true,
-    },
-  ];
+  const { data: inventory = [] } = api.character.getInventory.useQuery();
+
+  const giveStartingItemsMutation =
+    api.character.giveStartingItems.useMutation();
 
   const recentActivity = [
     {
@@ -119,7 +84,6 @@ export default function HubPage() {
     },
   ];
 
-  // Get missions from tRPC
   const { data: allMissions } = api.mission.getAll.useQuery();
   const availableMissions = (allMissions || []).slice(0, 3);
 
@@ -189,42 +153,62 @@ export default function HubPage() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {onlinePlayers.map((player) => (
-                  <div
-                    key={player.id}
-                    className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors cursor-pointer"
-                    onClick={() => handlePlayerClick(player)}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
-                        {player.name[0]}
-                      </div>
-                      <div>
-                        <div className="text-white font-medium">
-                          {player.name}
-                        </div>
-                        <div className="text-sm text-gray-400">
-                          Lv.{player.level}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <span
-                        className={`text-sm ${
-                          player.reputation >= 0
-                            ? "text-green-400"
-                            : "text-red-400"
-                        }`}
+                {playersLoading ? (
+                  <div className="space-y-3">
+                    {[...Array(3)].map((_, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center space-x-3 p-3 rounded-lg bg-gray-800/50"
                       >
-                        {player.reputation > 0 ? "+" : ""}
-                        {player.reputation}
-                      </span>
-                      <Button size="sm" variant="ghost">
-                        <MessageCircle className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        <div className="w-8 h-8 rounded-full bg-gray-700 animate-pulse"></div>
+                        <div className="flex-1">
+                          <div className="h-4 bg-gray-700 rounded w-24 mb-2 animate-pulse"></div>
+                          <div className="h-3 bg-gray-700 rounded w-16 animate-pulse"></div>
+                        </div>
+                        <div className="h-4 w-12 bg-gray-700 rounded animate-pulse"></div>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  onlinePlayers
+                    .filter((player) => player.id !== character?.id) // Filter out current user
+                    .map((player) => (
+                      <div
+                        key={player.id}
+                        className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 transition-colors cursor-pointer"
+                        onClick={() => handlePlayerClick(player)}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
+                            {player.name[0]}
+                          </div>
+                          <div>
+                            <div className="text-white font-medium">
+                              {player.name}
+                            </div>
+                            <div className="text-sm text-gray-400">
+                              Lv.{player.level}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center space-x-2">
+                          <span
+                            className={`text-sm ${
+                              player.reputation >= 0
+                                ? "text-green-400"
+                                : "text-red-400"
+                            }`}
+                          >
+                            {player.reputation > 0 ? "+" : ""}
+                            {player.reputation}
+                          </span>
+                          <Button size="sm" variant="ghost">
+                            <MessageCircle className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                )}
               </div>
             </CardContent>
           </Card>
@@ -251,6 +235,32 @@ export default function HubPage() {
                 >
                   <Plus className="h-4 w-4 mr-2" />
                   Create Party
+                </Button>
+              )}
+
+              {/* Starting Items Button - only show if character has no items */}
+              {inventory.length === 0 && (
+                <Button
+                  className="w-full justify-start"
+                  onClick={async () => {
+                    try {
+                      const result =
+                        await giveStartingItemsMutation.mutateAsync();
+                      alert(result.message);
+                    } catch (error) {
+                      alert(
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to get starting items"
+                      );
+                    }
+                  }}
+                  disabled={giveStartingItemsMutation.isPending}
+                >
+                  <Package className="h-4 w-4 mr-2" />
+                  {giveStartingItemsMutation.isPending
+                    ? "Getting Items..."
+                    : "Get Starting Items"}
                 </Button>
               )}
               <Button
