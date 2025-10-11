@@ -81,6 +81,9 @@ model Character {
   // Combat state (for dungeon sessions)
   currentHealth Int? // Tracks health during active dungeon
 
+  // Leveling system
+  pendingStatPoints Int @default(0) // Unallocated stat points from level ups
+
   isOnline  Boolean  @default(false)
   lastSeen  DateTime @default(now())
   createdAt DateTime @default(now())

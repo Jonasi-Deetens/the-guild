@@ -5,6 +5,14 @@ import {
   publicProcedure,
 } from "@/server/context";
 import { statisticsService } from "@/server/services/statisticsService";
+import {
+  getStatPointsPerLevel,
+  validateStatAllocations,
+  calculatePendingLevels,
+  calculateLevelFromExperience,
+  getExperienceForLevel,
+  getMaxLevel,
+} from "@/lib/utils/experience";
 
 export const characterRouter = createTRPCRouter({
   // Get current character
@@ -320,5 +328,212 @@ export const characterRouter = createTRPCRouter({
 
     const result = await dungeonEngine.giveStartingItems(character.id);
     return result;
+  }),
+
+  // Level up character with stat allocation
+  levelUp: protectedProcedure
+    .input(
+      z.object({
+        statAllocations: z.object({
+          maxHealth: z.number().min(0),
+          attack: z.number().min(0),
+          defense: z.number().min(0),
+          speed: z.number().min(0),
+          perception: z.number().min(0),
+          agility: z.number().min(0),
+          criticalChance: z.number().min(0),
+          blockStrength: z.number().min(0),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+        include: {
+          party: true,
+        },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is at max level
+      if (character.level >= getMaxLevel()) {
+        throw new Error("Character is already at max level");
+      }
+
+      // Check if character has pending stat points
+      if (character.pendingStatPoints < getStatPointsPerLevel()) {
+        throw new Error("Not enough stat points to level up");
+      }
+
+      // Check if character is in an active dungeon (prevent leveling during dungeon)
+      const activeDungeon = await ctx.db.dungeonSession.findFirst({
+        where: {
+          party: {
+            members: {
+              some: {
+                characterId: character.id,
+              },
+            },
+          },
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeDungeon) {
+        throw new Error(
+          "Cannot level up during an active dungeon. Return to the hub first."
+        );
+      }
+
+      // Validate stat allocations
+      const validation = validateStatAllocations(input.statAllocations);
+      if (!validation.isValid) {
+        throw new Error(validation.error || "Invalid stat allocations");
+      }
+
+      // Calculate new level
+      const newLevel = character.level + 1;
+
+      // Apply stat increases
+      const updatedCharacter = await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          level: newLevel,
+          pendingStatPoints:
+            character.pendingStatPoints - getStatPointsPerLevel(),
+          maxHealth: { increment: input.statAllocations.maxHealth },
+          health: { increment: input.statAllocations.maxHealth }, // Also heal
+          attack: { increment: input.statAllocations.attack },
+          defense: { increment: input.statAllocations.defense },
+          speed: { increment: input.statAllocations.speed },
+          perception: { increment: input.statAllocations.perception },
+          agility: { increment: input.statAllocations.agility },
+          criticalChance: {
+            increment: input.statAllocations.criticalChance * 0.01,
+          }, // Convert to decimal
+          blockStrength: { increment: input.statAllocations.blockStrength },
+        },
+      });
+
+      return {
+        success: true,
+        character: updatedCharacter,
+        statIncreases: input.statAllocations,
+      };
+    }),
+
+  // Check if character can level up
+  canLevelUp: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: {
+        id: true,
+        level: true,
+        experience: true,
+        pendingStatPoints: true,
+      },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    // Calculate what level the character should be based on their experience
+    const correctLevel = calculateLevelFromExperience(character.experience);
+    const pendingLevels = Math.max(0, correctLevel - character.level);
+    const canLevelUp = pendingLevels > 0 && character.level < getMaxLevel();
+
+    // Calculate what the pending stat points should be
+    const expectedPendingStatPoints = pendingLevels * getStatPointsPerLevel();
+
+    // Calculate XP requirements for next level
+    const nextLevelExp = getExperienceForLevel(character.level + 1);
+    const xpNeeded = nextLevelExp - character.experience;
+
+    console.log("🔍 [canLevelUp] Character state:", {
+      characterId: character.id,
+      currentLevel: character.level,
+      correctLevel,
+      experience: character.experience,
+      nextLevelExp,
+      xpNeeded,
+      pendingLevels,
+      currentPendingStatPoints: character.pendingStatPoints,
+      expectedPendingStatPoints,
+      canLevelUp,
+    });
+
+    // If the character has pending levels but incorrect stat points, fix it
+    if (
+      pendingLevels > 0 &&
+      character.pendingStatPoints !== expectedPendingStatPoints
+    ) {
+      console.log("🔧 Fixing incorrect pending stat points:", {
+        characterId: character.id,
+        pendingLevels,
+        expectedPendingStatPoints,
+        currentPendingStatPoints: character.pendingStatPoints,
+      });
+
+      // Update the character with the correct pending stat points
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          pendingStatPoints: expectedPendingStatPoints,
+        },
+      });
+
+      return {
+        canLevelUp,
+        pendingLevels,
+        pendingStatPoints: expectedPendingStatPoints,
+        isMaxLevel: character.level >= getMaxLevel(),
+      };
+    }
+
+    // Special case: if character has exactly enough XP for next level but no pending levels
+    // This can happen if the character's level in DB is outdated
+    if (
+      pendingLevels === 0 &&
+      character.experience >= nextLevelExp &&
+      character.level < getMaxLevel()
+    ) {
+      console.log(
+        "🔧 Character has enough XP but no pending levels - fixing level:",
+        {
+          characterId: character.id,
+          currentLevel: character.level,
+          experience: character.experience,
+          nextLevelExp,
+          correctLevel,
+        }
+      );
+
+      // Update the character's level to match their experience
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          level: correctLevel,
+          pendingStatPoints: 0, // Reset pending stat points since they should have been used
+        },
+      });
+
+      return {
+        canLevelUp: false, // No more levels to gain
+        pendingLevels: 0,
+        pendingStatPoints: 0,
+        isMaxLevel: correctLevel >= getMaxLevel(),
+      };
+    }
+
+    return {
+      canLevelUp,
+      pendingLevels,
+      pendingStatPoints: character.pendingStatPoints,
+      isMaxLevel: character.level >= getMaxLevel(),
+    };
   }),
 });

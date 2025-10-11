@@ -42,6 +42,12 @@ interface WebSocketState {
     statIncreases: any;
     totalExperience: number;
   } | null;
+  levelUpAvailableNotification: {
+    pendingLevels: number;
+    currentExperience: number;
+    requiredExperience: number;
+    pendingStatPoints: number;
+  } | null;
   experienceUpdateNotification: {
     newExperience: number;
     experienceGained: number;
@@ -117,6 +123,14 @@ interface WebSocketActions {
       totalExperience: number;
     } | null
   ) => void;
+  setLevelUpAvailableNotification: (
+    notification: {
+      pendingLevels: number;
+      currentExperience: number;
+      requiredExperience: number;
+      pendingStatPoints: number;
+    } | null
+  ) => void;
   setExperienceUpdateNotification: (
     notification: {
       newExperience: number;
@@ -136,6 +150,7 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     recentActivity: [],
     currentSession: null,
     levelUpNotification: null,
+    levelUpAvailableNotification: null,
     experienceUpdateNotification: null,
     lastEvent: null,
 
@@ -216,6 +231,11 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
       socket.on("characterLeveledUp", (data) => {
         console.log("Character leveled up:", data);
         set({ levelUpNotification: data });
+      });
+
+      socket.on("characterLevelUpAvailable", (data) => {
+        console.log("Character level up available:", data);
+        set({ levelUpAvailableNotification: data });
       });
 
       socket.on("characterExperienceUpdated", (data) => {
@@ -356,6 +376,9 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     },
     setLevelUpNotification: (notification) => {
       set({ levelUpNotification: notification });
+    },
+    setLevelUpAvailableNotification: (notification) => {
+      set({ levelUpAvailableNotification: notification });
     },
     setExperienceUpdateNotification: (notification) => {
       set({ experienceUpdateNotification: notification });

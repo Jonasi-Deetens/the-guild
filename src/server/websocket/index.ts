@@ -99,6 +99,12 @@ export interface ServerToClientEvents {
     statIncreases: any;
     totalExperience: number;
   }) => void;
+  characterLevelUpAvailable: (data: {
+    pendingLevels: number;
+    currentExperience: number;
+    requiredExperience: number;
+    pendingStatPoints: number;
+  }) => void;
   characterExperienceUpdated: (data: {
     newExperience: number;
     experienceGained: number;

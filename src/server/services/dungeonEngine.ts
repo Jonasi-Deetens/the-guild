@@ -10,6 +10,12 @@ import {
 } from "@/lib/redis";
 import { dungeonSessionService } from "./dungeonSession";
 import { statisticsService } from "./statisticsService";
+import {
+  calculateLevelFromExperience,
+  calculatePendingLevels,
+  getExperienceForLevel,
+  getStatPointsPerLevel,
+} from "@/lib/utils/experience";
 
 export interface DungeonAction {
   characterId: string;
@@ -1729,7 +1735,7 @@ export class DungeonEngine {
     characterId: string,
     experience: number
   ) {
-    console.log("🎯 Applying experience and level up:", {
+    console.log("🎯 Applying experience (manual level up required):", {
       characterId,
       experience,
     });
@@ -1746,98 +1752,61 @@ export class DungeonEngine {
     // Ensure experience is a valid number
     const validExperience = isNaN(experience) ? 0 : experience;
     const newExperience = (character.experience || 0) + validExperience;
-    const newLevel = this.calculateLevel(newExperience);
-    const leveledUp = newLevel > (character.level || 1);
+
+    // Calculate how many levels the character could gain
+    const pendingLevels = calculatePendingLevels(
+      character.level,
+      newExperience
+    );
+    const hasLevelUp = pendingLevels > 0;
+
+    // Calculate stat points that would be available
+    const newPendingStatPoints =
+      character.pendingStatPoints + pendingLevels * getStatPointsPerLevel();
 
     console.log("🎯 Experience calculation:", {
       currentExperience: character.experience,
       experienceToAdd: validExperience,
       newExperience,
       currentLevel: character.level,
-      newLevel,
-      leveledUp,
+      pendingLevels,
+      newPendingStatPoints,
     });
 
-    // Calculate stat increases if leveled up
-    let statIncreases = {};
-    if (leveledUp) {
-      const levelsGained = newLevel - character.level;
-      statIncreases = this.calculateStatIncreases(
-        levelsGained,
-        character.level
-      );
-    }
-
-    // Update character
+    // Update character with new experience and pending stat points
+    // DO NOT auto-level - player must manually level up in hub
     await db.character.update({
       where: { id: characterId },
       data: {
         experience: newExperience,
-        level: newLevel,
-        ...statIncreases,
+        pendingStatPoints: newPendingStatPoints,
       },
     });
 
-    // Notify player of experience update (always, not just on level up)
+    // Notify player of experience update
     if (wsManager) {
-      if (leveledUp) {
-        // Send level-up notification with stat increases
-        wsManager.emitToCharacter(characterId, "characterLeveledUp", {
-          newLevel,
-          statIncreases,
-          totalExperience: newExperience,
-        });
-      } else {
-        // Send experience update notification for non-level-up experience gains
-        console.log(
-          "🎯 [DungeonEngine] Sending experience update notification:",
-          {
-            characterId,
-            newExperience,
-            experienceGained: validExperience,
-          }
-        );
-        wsManager.emitToCharacter(characterId, "characterExperienceUpdated", {
-          newExperience,
-          experienceGained: validExperience,
+      if (hasLevelUp) {
+        // Notify that level ups are available
+        const nextLevelExp = getExperienceForLevel(character.level + 1);
+        wsManager.emitToCharacter(characterId, "characterLevelUpAvailable", {
+          pendingLevels,
+          currentExperience: newExperience,
+          requiredExperience: nextLevelExp,
+          pendingStatPoints: newPendingStatPoints,
         });
       }
+
+      // Always send experience update
+      wsManager.emitToCharacter(characterId, "characterExperienceUpdated", {
+        newExperience,
+        experienceGained: validExperience,
+      });
     }
   }
 
   private calculateLevel(experience: number): number {
-    // Experience formula: level = floor(sqrt(experience / 100)) + 1
-    // This means:
-    // Level 1: 0-99 XP
-    // Level 2: 100-399 XP
-    // Level 3: 400-899 XP
-    // Level 4: 900-1599 XP
-    // etc.
-    return Math.floor(Math.sqrt(experience / 100)) + 1;
-  }
-
-  private calculateStatIncreases(levelsGained: number, currentLevel: number) {
-    // Each level gives:
-    // +2 to max health
-    // +1 to attack
-    // +1 to defense
-    // +0.5 to speed (rounded down, so every 2 levels = +1)
-    // +0.5 to perception (rounded down, so every 2 levels = +1)
-
-    const healthIncrease = levelsGained * 2;
-    const attackIncrease = levelsGained;
-    const defenseIncrease = levelsGained;
-    const speedIncrease = Math.floor(levelsGained * 0.5);
-    const perceptionIncrease = Math.floor(levelsGained * 0.5);
-
-    return {
-      maxHealth: { increment: healthIncrease },
-      health: { increment: healthIncrease }, // Also heal the character
-      attack: { increment: attackIncrease },
-      defense: { increment: defenseIncrease },
-      speed: { increment: speedIncrease },
-      perception: { increment: perceptionIncrease },
-    };
+    // Use shared utility for consistent XP calculations
+    return calculateLevelFromExperience(experience);
   }
 
   // Give items to characters (for rewards, starting gear, etc.)
