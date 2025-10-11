@@ -91,6 +91,9 @@ export default function DungeonPage() {
   // WebSocket store for party chat
   const { partyChat, sendPartyMessage } = useWebSocketStore();
 
+  // Get current character data
+  const { data: currentCharacterData } = api.character.getCurrent.useQuery();
+
   // tRPC queries
   const { data: sessionData, refetch: refetchSession } =
     api.dungeon.getSession.useQuery({ sessionId }, { enabled: !!sessionId });
@@ -337,6 +340,10 @@ export default function DungeonPage() {
         perception: 5,
         attack: 10,
         defense: 5,
+        health: 100,
+        maxHealth: 100,
+        agility: 5,
+        blockStrength: 3,
       };
     }
     return {
@@ -344,7 +351,67 @@ export default function DungeonPage() {
       perception: character.perception || 5,
       attack: character.attack || 10,
       defense: character.defense || 5,
+      health: character.currentHealth || character.maxHealth,
+      maxHealth: character.maxHealth,
+      agility: character.agility || 5,
+      blockStrength: character.blockStrength || 3,
     };
+  };
+
+  const getPartyMembers = () => {
+    if (session?.party?.members && session.party.members.length > 0) {
+      return session.party.members.map((member) => ({
+        id: member.character.id,
+        name: member.character.name,
+        health: member.character.currentHealth || member.character.maxHealth, // Use currentHealth if available
+        maxHealth: member.character.maxHealth,
+        attack: member.character.attack,
+        defense: member.character.defense,
+        agility: member.character.agility || 5, // Default agility
+        blockStrength: member.character.blockStrength || 3, // Default block strength
+      }));
+    }
+
+    // Fallback: if no party members are loaded yet, use the current character
+    const currentCharacter = getCurrentCharacter();
+    if (currentCharacter) {
+      console.log(
+        "🎮 [Dungeon] Using current character as party member:",
+        currentCharacter
+      );
+      return [
+        {
+          id: currentCharacter.id,
+          name: currentCharacter.name,
+          health: currentCharacter.currentHealth || currentCharacter.maxHealth,
+          maxHealth: currentCharacter.maxHealth,
+          attack: currentCharacter.attack,
+          defense: currentCharacter.defense,
+          agility: currentCharacter.agility || 5,
+          blockStrength: currentCharacter.blockStrength || 3,
+        },
+      ];
+    }
+
+    // Second fallback: use character data from tRPC query
+    if (currentCharacterData) {
+      return [
+        {
+          id: currentCharacterData.id,
+          name: currentCharacterData.name,
+          health:
+            currentCharacterData.currentHealth ||
+            currentCharacterData.maxHealth,
+          maxHealth: currentCharacterData.maxHealth,
+          attack: currentCharacterData.attack,
+          defense: currentCharacterData.defense,
+          agility: currentCharacterData.agility || 5,
+          blockStrength: currentCharacterData.blockStrength || 3,
+        },
+      ];
+    }
+
+    return [];
   };
 
   if (!session) {
@@ -580,6 +647,7 @@ export default function DungeonPage() {
                 onActionSubmit={handleEventActionSubmit}
                 playerStats={getPlayerStats()}
                 hasSubmitted={actionSubmitted}
+                partyMembers={getPartyMembers()}
               />
             )}
 

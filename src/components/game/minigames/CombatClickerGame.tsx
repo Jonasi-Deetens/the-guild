@@ -1,21 +1,30 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Heart, Sword, Shield, Zap } from "@/components/icons";
+import { Heart, Sword, Shield, Zap, Star, Crown } from "@/components/icons";
+import { api } from "@/trpc/react";
+import {
+  CombatStateManager,
+  type CombatPartyMember,
+  type EnhancedMonster,
+  type DamageEvent,
+} from "@/lib/combat/CombatStateManager";
 
 interface CombatClickerGameProps {
   config: {
-    monsterCount: number;
-    monsterHealth: number; // per monster
-    monsterAttack: number;
-    attackInterval: number; // seconds
-    monsterName: string;
+    monsterTemplateIds: string[];
+    minMonsters: number;
+    maxMonsters: number;
+    eliteChance: number;
+    specialAbilityChance: number;
   };
   playerStats: {
     attack: number;
     defense: number;
     health: number;
     maxHealth: number;
+    agility: number;
+    blockStrength: number;
   };
   partyMembers: Array<{
     id: string;
@@ -24,6 +33,8 @@ interface CombatClickerGameProps {
     maxHealth: number;
     attack: number;
     defense: number;
+    agility: number;
+    blockStrength: number;
   }>;
   onComplete: (result: {
     victory: boolean;
@@ -31,28 +42,13 @@ interface CombatClickerGameProps {
     totalClicks: number;
     damageDealt: number;
     damageTaken: Record<string, number>;
+    blocks: number;
+    parries: number;
+    perfectParries: number;
     playersRevived: number;
     contributionByPlayer: Record<string, number>;
+    partyHealthUpdates: Record<string, number>;
   }) => void;
-}
-
-interface Monster {
-  id: string;
-  health: number;
-  maxHealth: number;
-  name: string;
-}
-
-interface PartyMember {
-  id: string;
-  name: string;
-  health: number;
-  maxHealth: number;
-  attack: number;
-  defense: number;
-  isKnockedOut: boolean;
-  reviveProgress: number;
-  reviveNeeded: number;
 }
 
 export function CombatClickerGame({
@@ -62,66 +58,91 @@ export function CombatClickerGame({
   onComplete,
 }: CombatClickerGameProps) {
   const [gameState, setGameState] = useState<{
-    monsters: Monster[];
-    party: PartyMember[];
+    monsters: EnhancedMonster[];
+    party: CombatPartyMember[];
+    blockStates: Record<string, any>;
+    damageLog: DamageEvent[];
     gameActive: boolean;
     gameOver: boolean;
     victory: boolean;
     timeStarted: number;
     timeTaken: number;
-    totalClicks: number;
-    damageDealt: number;
-    damageTaken: Record<string, number>;
-    playersRevived: number;
-    contributionByPlayer: Record<string, number>;
-    nextAttackTime: number;
   }>({
     monsters: [],
     party: [],
+    blockStates: {},
+    damageLog: [],
     gameActive: false,
     gameOver: false,
     victory: false,
     timeStarted: 0,
     timeTaken: 0,
-    totalClicks: 0,
-    damageDealt: 0,
-    damageTaken: {},
-    playersRevived: 0,
-    contributionByPlayer: {},
-    nextAttackTime: 0,
   });
 
-  const attackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const combatManager = useRef<CombatStateManager | null>(null);
   const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const attackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize game state
+  // Generate monsters using tRPC
+  const { data: monsters, isLoading: monstersLoading } =
+    api.monster.generateCombatMonsters.useQuery(
+      {
+        templateIds: config.monsterTemplateIds || [],
+        minMonsters: config.minMonsters || 1,
+        maxMonsters: config.maxMonsters || 3,
+        eliteChance: config.eliteChance || 0.2,
+        specialAbilityChance: config.specialAbilityChance || 0.1,
+      },
+      {
+        enabled:
+          config &&
+          config.monsterTemplateIds &&
+          config.monsterTemplateIds.length > 0,
+      }
+    );
+
+  // Initialize combat when monsters are loaded
   useEffect(() => {
-    const monsters: Monster[] = [];
-    for (let i = 0; i < config.monsterCount; i++) {
-      monsters.push({
-        id: `monster-${i}`,
-        health: config.monsterHealth,
-        maxHealth: config.monsterHealth,
-        name: config.monsterName,
-      });
+    if (monsters && monsters.length > 0 && !gameState.gameActive) {
+      console.log(
+        "🎮 [CombatClickerGame] Initializing combat with monsters:",
+        monsters
+      );
+
+      // Create combat manager
+      combatManager.current = new CombatStateManager();
+
+      // Convert party members to combat format
+      const combatParty: CombatPartyMember[] = partyMembers.map((member) => ({
+        id: member.id,
+        name: member.name,
+        currentHealth: member.health,
+        maxHealth: member.maxHealth,
+        attack: member.attack,
+        defense: member.defense,
+        agility: member.agility,
+        blockStrength: member.blockStrength,
+        isDead: false,
+      }));
+
+      // Initialize combat
+      combatManager.current.initializeCombat(combatParty, config);
+      combatManager.current.setMonsters(monsters);
+
+      // Get initial state
+      const initialState = combatManager.current.getState();
+
+      setGameState((prev) => ({
+        ...prev,
+        monsters: initialState.monsters,
+        party: initialState.party,
+        blockStates: initialState.blockStates,
+        damageLog: initialState.damageLog,
+        gameActive: true,
+        timeStarted: initialState.gameStartTime,
+      }));
     }
-
-    const party: PartyMember[] = partyMembers.map((member) => ({
-      ...member,
-      isKnockedOut: false,
-      reviveProgress: 0,
-      reviveNeeded: 3 + Math.floor(Math.random() * 3), // 3-5 clicks to revive
-    }));
-
-    setGameState((prev) => ({
-      ...prev,
-      monsters,
-      party,
-      gameActive: true,
-      timeStarted: Date.now(),
-      nextAttackTime: Date.now() + config.attackInterval * 1000,
-    }));
-  }, [config, partyMembers]);
+  }, [monsters, partyMembers, config, gameState.gameActive]);
 
   // Game timer
   useEffect(() => {
@@ -143,155 +164,168 @@ export function CombatClickerGame({
 
   // Monster attack timer
   useEffect(() => {
-    if (!gameState.gameActive || gameState.gameOver) return;
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-    const checkAttack = () => {
+    const checkAttacks = () => {
       const now = Date.now();
-      if (now >= gameState.nextAttackTime) {
-        performMonsterAttack();
-        setGameState((prev) => ({
-          ...prev,
-          nextAttackTime: now + config.attackInterval * 1000,
-        }));
-      }
+      const aliveMonsters = gameState.monsters.filter(
+        (monster) => monster.health > 0
+      );
+
+      aliveMonsters.forEach((monster) => {
+        if (now >= monster.nextAttackTime) {
+          // Show block button 2 seconds before attack
+          combatManager.current?.showBlockButton(monster.id);
+
+          // Schedule the actual attack
+          setTimeout(() => {
+            performMonsterAttack(monster.id);
+          }, 2000);
+
+          // Set next attack time
+          combatManager.current?.setNextAttackTime(monster.id);
+        }
+      });
     };
 
-    attackTimerRef.current = setInterval(checkAttack, 100);
+    attackTimerRef.current = setInterval(checkAttacks, 100);
 
     return () => {
       if (attackTimerRef.current) {
         clearInterval(attackTimerRef.current);
       }
     };
-  }, [
-    gameState.gameActive,
-    gameState.gameOver,
-    gameState.nextAttackTime,
-    config.attackInterval,
-  ]);
+  }, [gameState.gameActive, gameState.gameOver, gameState.monsters]);
 
-  const performMonsterAttack = () => {
-    setGameState((prev) => {
-      const aliveMembers = prev.party.filter((member) => !member.isKnockedOut);
-      if (aliveMembers.length === 0) return prev;
+  // Update block timing states for visual feedback
+  useEffect(() => {
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-      const target =
-        aliveMembers[Math.floor(Math.random() * aliveMembers.length)];
-      const damage = Math.max(1, config.monsterAttack - target.defense);
-      const newHealth = Math.max(0, target.health - damage);
+    const updateBlockStates = () => {
+      const newState = combatManager.current?.getState();
+      if (newState) {
+        setGameState((prev) => ({
+          ...prev,
+          blockStates: newState.blockStates,
+        }));
+      }
+    };
 
-      const updatedParty = prev.party.map((member) =>
-        member.id === target.id
-          ? {
-              ...member,
-              health: newHealth,
-              isKnockedOut: newHealth === 0,
-            }
-          : member
-      );
+    const blockUpdateInterval = setInterval(updateBlockStates, 50); // Update every 50ms for smooth animation
 
-      const newDamageTaken = {
-        ...prev.damageTaken,
-        [target.id]: (prev.damageTaken[target.id] || 0) + damage,
-      };
+    return () => {
+      clearInterval(blockUpdateInterval);
+    };
+  }, [gameState.gameActive, gameState.gameOver]);
 
-      return {
-        ...prev,
-        party: updatedParty,
-        damageTaken: newDamageTaken,
-      };
-    });
+  const performMonsterAttack = (monsterId: string) => {
+    if (!combatManager.current) return;
+
+    const aliveMembers = gameState.party.filter((member) => !member.isDead);
+    if (aliveMembers.length === 0) return;
+
+    // Pick random target
+    const target =
+      aliveMembers[Math.floor(Math.random() * aliveMembers.length)];
+
+    // Get the stored block status from when player clicked
+    const blockState = gameState.blockStates[monsterId];
+    const blockStatus = blockState?.blockStatus || "none";
+
+    // Process attack
+    const result = combatManager.current.processMonsterAttack(
+      monsterId,
+      target.id,
+      blockStatus
+    );
+
+    // Hide block button
+    combatManager.current.hideBlockButton(monsterId);
+
+    // Update state
+    const newState = combatManager.current.getState();
+    setGameState((prev) => ({
+      ...prev,
+      monsters: newState.monsters,
+      party: newState.party,
+      blockStates: newState.blockStates,
+      damageLog: newState.damageLog,
+    }));
   };
 
   const handleMonsterClick = (monsterId: string) => {
-    if (!gameState.gameActive || gameState.gameOver) return;
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-    setGameState((prev) => {
-      const monster = prev.monsters.find((m) => m.id === monsterId);
-      if (!monster) return prev;
+    // Find the current player (assuming first party member for now)
+    const currentPlayer = gameState.party[0];
+    if (!currentPlayer || currentPlayer.isDead) return;
 
-      // Calculate damage based on player stats
-      const baseDamage = playerStats.attack;
-      const randomFactor = 0.8 + Math.random() * 0.4; // 0.8 to 1.2 multiplier
-      const damage = Math.max(1, Math.floor(baseDamage * randomFactor));
+    // Process attack
+    const result = combatManager.current.processPartyAttack(
+      currentPlayer.id,
+      monsterId
+    );
 
-      const newHealth = Math.max(0, monster.health - damage);
-      const updatedMonsters = prev.monsters.map((m) =>
-        m.id === monsterId ? { ...m, health: newHealth } : m
-      );
+    // Update state
+    const newState = combatManager.current.getState();
+    setGameState((prev) => ({
+      ...prev,
+      monsters: newState.monsters,
+      party: newState.party,
+      damageLog: newState.damageLog,
+    }));
+  };
 
-      const newContributionByPlayer = {
-        ...prev.contributionByPlayer,
-        [playerStats.attack]:
-          (prev.contributionByPlayer[playerStats.attack] || 0) + damage,
-      };
+  const handleBlockClick = (monsterId: string) => {
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-      return {
-        ...prev,
-        monsters: updatedMonsters,
-        totalClicks: prev.totalClicks + 1,
-        damageDealt: prev.damageDealt + damage,
-        contributionByPlayer: newContributionByPlayer,
-      };
-    });
+    const blockState = gameState.blockStates[monsterId];
+    if (!blockState || !blockState.isVisible) return;
+
+    const clickTime = Date.now();
+
+    // Register the block attempt in the combat manager
+    combatManager.current.registerBlockAttempt(monsterId, clickTime);
+
+    // Update UI state
+    const newState = combatManager.current.getState();
+    setGameState((prev) => ({
+      ...prev,
+      blockStates: newState.blockStates,
+    }));
   };
 
   const handleReviveClick = (memberId: string) => {
-    if (!gameState.gameActive || gameState.gameOver) return;
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-    setGameState((prev) => {
-      const member = prev.party.find((m) => m.id === memberId);
-      if (!member || !member.isKnockedOut) return prev;
-
-      const newReviveProgress = member.reviveProgress + 1;
-      const isRevived = newReviveProgress >= member.reviveNeeded;
-
-      const updatedParty = prev.party.map((m) =>
-        m.id === memberId
-          ? {
-              ...m,
-              reviveProgress: newReviveProgress,
-              isKnockedOut: !isRevived,
-              health: isRevived ? Math.floor(m.maxHealth * 0.5) : m.health, // Revive with 50% health
-            }
-          : m
-      );
-
-      return {
+    const success = combatManager.current.revivePartyMember(memberId);
+    if (success) {
+      const newState = combatManager.current.getState();
+      setGameState((prev) => ({
         ...prev,
-        party: updatedParty,
-        playersRevived: isRevived
-          ? prev.playersRevived + 1
-          : prev.playersRevived,
-      };
-    });
+        party: newState.party,
+        damageLog: newState.damageLog,
+      }));
+    }
   };
 
   // Check win/lose conditions
   useEffect(() => {
-    if (!gameState.gameActive || gameState.gameOver) return;
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
 
-    const aliveMembers = gameState.party.filter(
-      (member) => !member.isKnockedOut
-    );
-    const aliveMonsters = gameState.monsters.filter(
-      (monster) => monster.health > 0
-    );
+    const { isOver, victory } = combatManager.current.checkGameEnd();
 
-    if (aliveMonsters.length === 0) {
-      // Victory
+    if (isOver) {
       setGameState((prev) => ({
         ...prev,
         gameOver: true,
-        victory: true,
-        gameActive: false,
-      }));
-    } else if (aliveMembers.length === 0) {
-      // Defeat
-      setGameState((prev) => ({
-        ...prev,
-        gameOver: true,
-        victory: false,
+        victory,
         gameActive: false,
       }));
     }
@@ -304,29 +338,11 @@ export function CombatClickerGame({
 
   // Complete game when over
   useEffect(() => {
-    if (gameState.gameOver) {
-      const finalTime = Date.now() - gameState.timeStarted;
-      onComplete({
-        victory: gameState.victory,
-        timeTaken: finalTime,
-        totalClicks: gameState.totalClicks,
-        damageDealt: gameState.damageDealt,
-        damageTaken: gameState.damageTaken,
-        playersRevived: gameState.playersRevived,
-        contributionByPlayer: gameState.contributionByPlayer,
-      });
+    if (gameState.gameOver && combatManager.current) {
+      const result = combatManager.current.getCombatResult();
+      onComplete(result);
     }
-  }, [
-    gameState.gameOver,
-    gameState.victory,
-    gameState.timeTaken,
-    gameState.totalClicks,
-    gameState.damageDealt,
-    gameState.damageTaken,
-    gameState.playersRevived,
-    gameState.contributionByPlayer,
-    onComplete,
-  ]);
+  }, [gameState.gameOver, onComplete]);
 
   // Cleanup timers
   useEffect(() => {
@@ -346,15 +362,122 @@ export function CombatClickerGame({
     return `${minutes}:${(seconds % 60).toString().padStart(2, "0")}`;
   };
 
+  const getMonsterTypeIcon = (type: string) => {
+    switch (type) {
+      case "WARRIOR":
+        return "⚔️";
+      case "RANGER":
+        return "🏹";
+      case "MAGE":
+        return "🔮";
+      case "HEALER":
+        return "✨";
+      case "TANK":
+        return "🛡️";
+      case "BERSERKER":
+        return "💀";
+      default:
+        return "👹";
+    }
+  };
+
+  const getRarityColor = (rarity: string) => {
+    switch (rarity) {
+      case "COMMON":
+        return "border-gray-500";
+      case "ELITE":
+        return "border-yellow-500";
+      case "RARE":
+        return "border-purple-500";
+      case "BOSS":
+        return "border-red-500";
+      default:
+        return "border-gray-500";
+    }
+  };
+
+  const getRarityIcon = (rarity: string) => {
+    switch (rarity) {
+      case "ELITE":
+        return <Star className="h-4 w-4 text-yellow-400" />;
+      case "RARE":
+        return <Star className="h-4 w-4 text-purple-400" />;
+      case "BOSS":
+        return <Crown className="h-4 w-4 text-red-400" />;
+      default:
+        return null;
+    }
+  };
+
+  if (monstersLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-white">Loading monsters...</div>
+      </div>
+    );
+  }
+
+  // If no monsters are available and we're not loading, show an error
+  if (!monsters || monsters.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <div className="text-red-400 mb-2">⚠️ No monsters available</div>
+          <div className="text-gray-300 text-sm">
+            {config &&
+            config.monsterTemplateIds &&
+            config.monsterTemplateIds.length === 0
+              ? "No monster templates configured for this event."
+              : "Failed to generate monsters for this combat event."}
+          </div>
+          <div className="text-gray-400 text-xs mt-2">
+            Config: {JSON.stringify(config, null, 2)}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col items-center space-y-6 p-6">
       {/* Game Header */}
       <div className="text-center">
         <h3 className="text-2xl font-bold text-white mb-2">Combat Challenge</h3>
         <p className="text-gray-400 text-sm mb-4">
-          Click monsters to attack! They'll fight back every{" "}
-          {config.attackInterval} seconds.
+          Click monsters to attack! Block their attacks by clicking the block
+          buttons.
         </p>
+
+        {/* Blocking Instructions */}
+        <div className="bg-gray-800/50 border border-gray-600 rounded-lg p-3 mb-4 text-left">
+          <h4 className="text-white font-semibold mb-2">🛡️ Blocking System:</h4>
+          <div className="text-xs text-gray-300 space-y-1">
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-blue-400 rounded"></div>
+              <span>
+                <strong>Blue:</strong> Warning phase - Block button appears
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-green-400 rounded"></div>
+              <span>
+                <strong>Green:</strong> Block window - Click to reduce damage
+              </span>
+            </div>
+            <div className="flex items-center space-x-2">
+              <div className="w-3 h-3 bg-yellow-400 rounded animate-pulse"></div>
+              <span>
+                <strong>Yellow:</strong> Parry window - Click for PERFECT BLOCK!
+              </span>
+            </div>
+            <div className="mt-2 pt-2 border-t border-gray-600">
+              <span className="text-gray-400">
+                <strong>Note:</strong> Faster monsters have shorter, more
+                challenging windows!
+              </span>
+            </div>
+          </div>
+        </div>
         <div className="flex items-center justify-center space-x-4 text-sm">
           <div className="flex items-center space-x-1">
             <Sword className="h-4 w-4 text-orange-400" />
@@ -374,22 +497,37 @@ export function CombatClickerGame({
       </div>
 
       {/* Monsters */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-4xl">
         {gameState.monsters.map((monster) => (
           <div
             key={monster.id}
-            className={`relative bg-red-900/50 border-2 rounded-lg p-4 cursor-pointer transition-all duration-200 ${
+            className={`relative bg-red-900/50 border-2 rounded-lg p-4 transition-all duration-200 ${getRarityColor(
+              monster.rarity
+            )} ${
               monster.health > 0
-                ? "border-red-500 hover:border-red-400 hover:bg-red-900/70"
-                : "border-gray-600 bg-gray-800/50 cursor-not-allowed"
+                ? "hover:bg-red-900/70"
+                : "border-gray-600 bg-gray-800/50"
             }`}
-            onClick={() => monster.health > 0 && handleMonsterClick(monster.id)}
           >
             <div className="text-center">
-              <div className="text-4xl mb-2">👹</div>
-              <h4 className="text-lg font-semibold text-white mb-2">
+              <div className="flex items-center justify-center space-x-2 mb-2">
+                <span className="text-4xl">
+                  {getMonsterTypeIcon(monster.type)}
+                </span>
+                {getRarityIcon(monster.rarity)}
+              </div>
+              <h4 className="text-lg font-semibold text-white mb-1">
                 {monster.name}
               </h4>
+              <div className="text-xs text-gray-300 mb-2">
+                {monster.type} • {monster.rarity}
+              </div>
+              <div className="text-xs text-gray-400 mb-2">
+                Speed: {(monster.attackInterval / 1000).toFixed(1)}s • Attack:{" "}
+                {monster.attack} • Defense: {monster.defense}
+              </div>
+
+              {/* Health Bar */}
               <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
                 <div
                   className={`h-3 rounded-full transition-all duration-300 ${
@@ -404,16 +542,129 @@ export function CombatClickerGame({
                   }}
                 />
               </div>
-              <p className="text-sm text-gray-300">
+              <p className="text-sm text-gray-300 mb-3">
                 {monster.health}/{monster.maxHealth} HP
               </p>
+
+              {/* Attack Button */}
+              {monster.health > 0 && (
+                <button
+                  onClick={() => handleMonsterClick(monster.id)}
+                  className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition-colors"
+                >
+                  Attack
+                </button>
+              )}
+
+              {/* Block Button with Visual Feedback */}
+              {gameState.blockStates[monster.id]?.isVisible &&
+                (() => {
+                  const timingState =
+                    combatManager.current?.getBlockTimingState(monster.id);
+                  const isHolding =
+                    gameState.blockStates[monster.id]?.isHolding;
+
+                  // Determine button color based on timing
+                  let buttonClass =
+                    "w-full mt-2 px-4 py-2 rounded font-semibold transition-all duration-100 ";
+                  let buttonText = "Block!";
+
+                  if (isHolding) {
+                    buttonClass += "bg-blue-700 text-blue-200";
+                    buttonText = "Blocking...";
+                  } else if (timingState?.isInParryWindow) {
+                    buttonClass +=
+                      "bg-yellow-500 text-yellow-900 animate-pulse shadow-lg shadow-yellow-500/50";
+                    buttonText = "PARRY NOW!";
+                  } else if (timingState?.isInBlockWindow) {
+                    buttonClass += "bg-green-600 text-white hover:bg-green-700";
+                    buttonText = "Block!";
+                  } else {
+                    buttonClass += "bg-blue-600 text-white hover:bg-blue-700";
+                    buttonText = "Block!";
+                  }
+
+                  return (
+                    <div className="space-y-2">
+                      {/* Timing Progress Bar */}
+                      <div className="w-full bg-gray-700 rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all duration-100 ${
+                            timingState?.isInParryWindow
+                              ? "bg-yellow-400"
+                              : timingState?.isInBlockWindow
+                              ? "bg-green-400"
+                              : "bg-blue-400"
+                          }`}
+                          style={{
+                            width: `${(timingState?.progress || 0) * 100}%`,
+                          }}
+                        />
+                      </div>
+
+                      {/* Time Display */}
+                      {timingState && timingState.timeUntilAttack > 0 && (
+                        <div className="text-xs text-center text-gray-300 space-y-1">
+                          {timingState.isInParryWindow ? (
+                            <div>
+                              <span className="text-yellow-400 font-bold">
+                                PARRY WINDOW!{" "}
+                                {(timingState.timeUntilAttack / 1000).toFixed(
+                                  1
+                                )}
+                                s
+                              </span>
+                              <div className="text-yellow-300">
+                                ({timingState.parryWindow}ms window)
+                              </div>
+                            </div>
+                          ) : timingState.isInBlockWindow ? (
+                            <div>
+                              <span className="text-green-400">
+                                Block Window:{" "}
+                                {(timingState.timeUntilAttack / 1000).toFixed(
+                                  1
+                                )}
+                                s
+                              </span>
+                              <div className="text-green-300">
+                                ({timingState.blockWindow}ms window)
+                              </div>
+                            </div>
+                          ) : (
+                            <div>
+                              <span className="text-blue-400">
+                                Warning:{" "}
+                                {(timingState.timeUntilAttack / 1000).toFixed(
+                                  1
+                                )}
+                                s
+                              </span>
+                              <div className="text-blue-300">
+                                (Speed: {timingState.attackSpeed.toFixed(1)}x)
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Block Button */}
+                      <button
+                        onClick={() => handleBlockClick(monster.id)}
+                        className={buttonClass}
+                      >
+                        {buttonText}
+                      </button>
+                    </div>
+                  );
+                })()}
             </div>
           </div>
         ))}
       </div>
 
       {/* Party Status */}
-      <div className="w-full max-w-2xl">
+      <div className="w-full max-w-4xl">
         <h4 className="text-lg font-semibold text-white mb-3 text-center">
           Party Status
         </h4>
@@ -422,7 +673,7 @@ export function CombatClickerGame({
             <div
               key={member.id}
               className={`bg-gray-800/50 border-2 rounded-lg p-3 ${
-                member.isKnockedOut
+                member.isDead
                   ? "border-red-500 bg-red-900/20"
                   : "border-gray-600"
               }`}
@@ -432,56 +683,89 @@ export function CombatClickerGame({
                 <div className="flex items-center space-x-1">
                   <Heart className="h-4 w-4 text-red-400" />
                   <span className="text-sm text-gray-300">
-                    {member.health}/{member.maxHealth}
+                    {member.currentHealth}/{member.maxHealth}
                   </span>
                 </div>
               </div>
               <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
                 <div
                   className={`h-2 rounded-full transition-all duration-300 ${
-                    member.health > member.maxHealth * 0.5
+                    member.currentHealth > member.maxHealth * 0.5
                       ? "bg-green-500"
-                      : member.health > member.maxHealth * 0.25
+                      : member.currentHealth > member.maxHealth * 0.25
                       ? "bg-yellow-500"
                       : "bg-red-500"
                   }`}
                   style={{
-                    width: `${(member.health / member.maxHealth) * 100}%`,
+                    width: `${
+                      (member.currentHealth / member.maxHealth) * 100
+                    }%`,
                   }}
                 />
               </div>
-              {member.isKnockedOut && (
-                <div className="mt-2">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-red-400">
-                      Revive Progress
-                    </span>
-                    <span className="text-xs text-gray-400">
-                      {member.reviveProgress}/{member.reviveNeeded}
-                    </span>
-                  </div>
-                  <div className="w-full bg-gray-700 rounded-full h-1">
-                    <div
-                      className="h-1 rounded-full bg-blue-500 transition-all duration-200"
-                      style={{
-                        width: `${
-                          (member.reviveProgress / member.reviveNeeded) * 100
-                        }%`,
-                      }}
-                    />
-                  </div>
-                  <button
-                    onClick={() => handleReviveClick(member.id)}
-                    className="w-full mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
-                  >
-                    Click to Revive
-                  </button>
-                </div>
+              {member.isDead && (
+                <button
+                  onClick={() => handleReviveClick(member.id)}
+                  className="w-full mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700 transition-colors"
+                >
+                  Click to Revive
+                </button>
               )}
             </div>
           ))}
         </div>
       </div>
+
+      {/* Damage Log */}
+      {gameState.damageLog.length > 0 && (
+        <div className="w-full max-w-4xl">
+          <h4 className="text-lg font-semibold text-white mb-3 text-center">
+            Combat Log
+          </h4>
+          <div className="bg-gray-900/50 border border-gray-600 rounded-lg p-3 max-h-32 overflow-y-auto">
+            {gameState.damageLog.slice(-10).map((event) => (
+              <div key={event.id} className="text-sm text-gray-300 mb-1">
+                <span className="text-gray-400">
+                  {new Date(event.timestamp).toLocaleTimeString()}
+                </span>{" "}
+                <span
+                  className={
+                    event.type === "damage_dealt"
+                      ? "text-green-400"
+                      : event.type === "damage_taken"
+                      ? "text-red-400"
+                      : event.type === "heal"
+                      ? "text-blue-400"
+                      : event.type === "parry"
+                      ? "text-yellow-400 font-bold"
+                      : event.type === "block"
+                      ? "text-green-300"
+                      : "text-gray-300"
+                  }
+                >
+                  {event.source}{" "}
+                  {event.type === "damage_dealt"
+                    ? "attacks"
+                    : event.type === "damage_taken"
+                    ? "takes"
+                    : event.type === "heal"
+                    ? "heals"
+                    : event.type === "parry"
+                    ? "PARRYS"
+                    : event.type === "block"
+                    ? "blocks"
+                    : "affects"}{" "}
+                  {event.target}
+                  {event.amount > 0 && ` for ${event.amount} damage`}
+                  {event.isCritical && " (CRITICAL!)"}
+                  {event.type === "parry" && " - PERFECT PARRY!"}
+                  {event.type === "block" && " - BLOCKED!"}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Game Over Screen */}
       {gameState.gameOver && (
@@ -495,9 +779,10 @@ export function CombatClickerGame({
             </h2>
             <div className="space-y-2 text-gray-300 mb-6">
               <p>Time: {formatTime(gameState.timeTaken)}</p>
-              <p>Total Clicks: {gameState.totalClicks}</p>
-              <p>Damage Dealt: {gameState.damageDealt}</p>
-              <p>Players Revived: {gameState.playersRevived}</p>
+              <p>
+                Monsters Defeated:{" "}
+                {gameState.monsters.filter((m) => m.health <= 0).length}
+              </p>
             </div>
             <p className="text-sm text-gray-400">
               Results will be processed automatically...

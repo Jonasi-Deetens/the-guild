@@ -103,8 +103,17 @@ export function MinigameContainer({
 }
 
 // Helper function to map event types to minigame types
-export function getMinigameTypeForEvent(eventType: string): MinigameType {
-  switch (eventType) {
+export function getMinigameTypeForEvent(event: {
+  type: string;
+  template?: { minigameType?: string };
+}): MinigameType {
+  // First check if the template has a specific minigame type
+  if (event.template?.minigameType) {
+    return event.template.minigameType as MinigameType;
+  }
+
+  // Fallback to default mapping based on event type
+  switch (event.type) {
     case "COMBAT":
     case "BOSS":
       return "COMBAT_CLICKER";

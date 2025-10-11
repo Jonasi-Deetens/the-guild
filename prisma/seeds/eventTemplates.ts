@@ -20,12 +20,15 @@ async function main() {
         enemyTypes: ["goblin"],
         minEnemies: 2,
         maxEnemies: 4,
-        // Combat clicker specific config
-        monsterCount: 2,
-        monsterHealth: 80,
-        monsterAttack: 8,
-        attackInterval: 4,
-        monsterName: "Goblin",
+        // New monster template system
+        monsterTemplateIds: [
+          "cmglkno020000umrsi8917116",
+          "cmglkno0p0004umrsgqn21ds9",
+        ], // Goblin Warrior, Goblin Archer
+        minMonsters: 2,
+        maxMonsters: 4,
+        eliteChance: 0.2, // 20% chance for elite
+        specialAbilityChance: 0.1, // 10% chance for special abilities
       },
       outcomes: {
         victory: { experience: 20, gold: 30 },
@@ -46,12 +49,16 @@ async function main() {
         enemyTypes: ["skeleton"],
         minEnemies: 3,
         maxEnemies: 5,
-        // Combat clicker specific config
-        monsterCount: 3,
-        monsterHealth: 100,
-        monsterAttack: 10,
-        attackInterval: 3,
-        monsterName: "Skeleton",
+        // New monster template system
+        monsterTemplateIds: [
+          "cmglkno0e0002umrsdos6vngr",
+          "cmglkno0u0005umrsplb47dhx",
+          "cmglkno180008umrswssz3ruo",
+        ], // Knight, Bandit Scout, Dark Mage
+        minMonsters: 3,
+        maxMonsters: 5,
+        eliteChance: 0.25, // 25% chance for elite
+        specialAbilityChance: 0.15, // 15% chance for special abilities
       },
       outcomes: {
         victory: { experience: 40, gold: 60 },
@@ -64,13 +71,19 @@ async function main() {
       name: "Bandit Raid",
       description: "Desperate bandits block your path, demanding tribute.",
       difficulty: 2,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 120,
         environments: ["road", "forest", "mountain"],
         enemyTypes: ["bandit"],
         minEnemies: 2,
         maxEnemies: 4,
+        // New monster template system
+        monsterTemplateIds: ["cmglkno0u0005umrsplb47dhx"], // Bandit Scout
+        minMonsters: 2,
+        maxMonsters: 4,
+        eliteChance: 0.15, // 15% chance for elite bandits
+        specialAbilityChance: 0.05, // 5% chance for special abilities
       },
       outcomes: {
         victory: { experience: 35, gold: 80 },
@@ -84,13 +97,23 @@ async function main() {
       description:
         "A powerful demon blocks your path, its eyes glowing with malevolence.",
       difficulty: 4,
-      minigameType: "NONE",
+      minigameType: "COMBAT_CLICKER",
       config: {
         timeLimit: 200,
         environments: ["hell", "abyss", "corrupted"],
         enemyTypes: ["demon"],
         minEnemies: 1,
         maxEnemies: 2,
+        // New monster template system
+        monsterTemplateIds: [
+          "cmglkno1m000bumrsbt4ytwz3", // Warlock
+          "cmglkno2t000kumrszk2ec0bn", // Rage Demon
+          "cmglkno31000mumrsiu9nxqd4", // Lich King
+        ],
+        minMonsters: 1,
+        maxMonsters: 2,
+        eliteChance: 0.4, // 40% chance for elite demons
+        specialAbilityChance: 0.3, // 30% chance for special abilities
       },
       outcomes: {
         victory: { experience: 100, gold: 200 },
@@ -321,12 +344,12 @@ async function main() {
         bossType: "goblin_chief",
         phases: 2,
         specialAbilities: ["charge", "summon"],
-        // Combat clicker specific config
-        monsterCount: 1,
-        monsterHealth: 200,
-        monsterAttack: 15,
-        attackInterval: 3,
-        monsterName: "Goblin Chief",
+        // New monster template system
+        monsterTemplateIds: ["cmglkno35000numrsdw335ye5"], // Orc Warlord (boss)
+        minMonsters: 1,
+        maxMonsters: 1,
+        eliteChance: 0, // Boss is already elite
+        specialAbilityChance: 1.0, // Boss always has special abilities
       },
       outcomes: {
         victory: { experience: 100, gold: 200, items: ["chiefs_weapon"] },
@@ -345,12 +368,12 @@ async function main() {
         bossType: "dragon",
         phases: 3,
         specialAbilities: ["fire_breath", "fly", "summon", "heal"],
-        // Combat clicker specific config
-        monsterCount: 1,
-        monsterHealth: 500,
-        monsterAttack: 25,
-        attackInterval: 2,
-        monsterName: "Dragon Lord",
+        // New monster template system
+        monsterTemplateIds: ["cmglkno2w000lumrsi2waxhdx"], // Dragon (boss)
+        minMonsters: 1,
+        maxMonsters: 1,
+        eliteChance: 0, // Boss is already elite
+        specialAbilityChance: 1.0, // Boss always has special abilities
       },
       outcomes: {
         victory: { experience: 500, gold: 1000, items: ["dragon_scale_armor"] },
@@ -395,6 +418,60 @@ async function main() {
       outcomes: {
         help: { experience: 80, gold: 100, knowledge: "spell_scroll" },
         refuse: { experience: 20, gold: 0 },
+      },
+    },
+  ];
+
+  // Rest Event Templates
+  const restTemplates = [
+    {
+      type: "REST",
+      name: "Safe Haven",
+      description:
+        "You find a peaceful clearing where you can rest and recover.",
+      difficulty: 0,
+      minigameType: "NONE",
+      config: {
+        timeLimit: 60,
+        environments: ["forest", "cave", "ruins"],
+        healingAmount: 50, // Heal 50% of max health
+        description: "A quiet spot to rest and recover strength.",
+      },
+      outcomes: {
+        rest: { experience: 5, gold: 0 },
+      },
+    },
+    {
+      type: "REST",
+      name: "Ancient Shrine",
+      description:
+        "An ancient shrine radiates healing energy, offering respite from your journey.",
+      difficulty: 0,
+      minigameType: "NONE",
+      config: {
+        timeLimit: 90,
+        environments: ["temple", "ruins", "sacred"],
+        healingAmount: 75, // Heal 75% of max health
+        description: "The shrine's divine energy restores your vitality.",
+      },
+      outcomes: {
+        rest: { experience: 10, gold: 0 },
+      },
+    },
+    {
+      type: "REST",
+      name: "Healing Spring",
+      description: "A magical spring bubbles with restorative waters.",
+      difficulty: 0,
+      minigameType: "NONE",
+      config: {
+        timeLimit: 120,
+        environments: ["forest", "mountain", "magical"],
+        healingAmount: 100, // Full heal
+        description: "The spring's magical waters fully restore your health.",
+      },
+      outcomes: {
+        rest: { experience: 15, gold: 0 },
       },
     },
   ];
@@ -446,6 +523,7 @@ async function main() {
     ...trapTemplates,
     ...puzzleTemplates,
     ...choiceTemplates,
+    ...restTemplates,
     ...bossTemplates,
     ...npcTemplates,
     ...hazardTemplates,

@@ -546,9 +546,42 @@ export function EventCard({
     setShowMinigame(true);
   };
 
+  const getMinigameConfig = (event: any, minigameType: string) => {
+    if (minigameType === "COMBAT_CLICKER") {
+      // Use template config if available, otherwise use defaults
+      const template = event.template || {};
+      const config = template.config || {};
+
+      // For the new monster template system, we need to pass the template IDs and generation parameters
+      const combatConfig = {
+        monsterTemplateIds: config.monsterTemplateIds || [],
+        minMonsters: config.minMonsters || 1,
+        maxMonsters: config.maxMonsters || 3,
+        eliteChance: config.eliteChance || 0.2,
+        specialAbilityChance: config.specialAbilityChance || 0.1,
+        // Keep other config properties for backward compatibility
+        timeLimit: config.timeLimit || 120,
+        environments: config.environments || ["cave"],
+        enemyTypes: config.enemyTypes || ["monster"],
+        // Legacy properties for fallback
+        monsterCount:
+          config.monsterCount || event.eventData?.enemies?.length || 2,
+        monsterHealth: config.monsterHealth || 80,
+        monsterAttack: config.monsterAttack || 8,
+        attackInterval: config.attackInterval || 4,
+        monsterName: config.monsterName || "Monster",
+      };
+
+      return combatConfig;
+    }
+
+    // For other minigames, return the event data as-is
+    return event.eventData || {};
+  };
+
   const eventType = event.type || event.template?.type || "UNKNOWN";
   const availableActions = getAvailableActions(eventType, event.eventData);
-  const minigameType = getMinigameTypeForEvent(eventType);
+  const minigameType = getMinigameTypeForEvent(event);
   const requiresMinigame = minigameType !== "NONE";
 
   return (
@@ -765,7 +798,7 @@ export function EventCard({
               ) : (
                 <MinigameContainer
                   type={minigameType}
-                  config={event.eventData || {}}
+                  config={getMinigameConfig(event, minigameType)}
                   playerStats={playerStats}
                   partyMembers={partyMembers}
                   onComplete={handleMinigameComplete}

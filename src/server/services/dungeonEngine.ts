@@ -8,6 +8,7 @@ import {
   setActiveSessionState,
   getActiveSessionState,
 } from "@/lib/redis";
+import { dungeonSessionService } from "./dungeonSession";
 import { statisticsService } from "./statisticsService";
 
 export interface DungeonAction {
@@ -75,6 +76,9 @@ export class DungeonEngine {
           timeline: timeline as any,
         },
       });
+
+      // Initialize party health for the dungeon
+      await dungeonSessionService.initializePartyHealth(sessionId);
 
       // Store active state in Redis
       const activeState: ActiveSessionState = {
@@ -181,6 +185,11 @@ export class DungeonEngine {
   }
 
   async startTurn(sessionId: string) {
+    console.log(
+      "🎯 startTurn called for session:",
+      sessionId,
+      "- THIS SHOULD NOT HAPPEN IN EVENT-BASED SYSTEM"
+    );
     try {
       const session = await db.dungeonSession.findUnique({
         where: { id: sessionId },
@@ -223,7 +232,17 @@ export class DungeonEngine {
       }
 
       // Set timeout to resolve turn
+      console.log(
+        "🎯 Setting timeout to resolve turn in",
+        session.turnTimeLimit,
+        "seconds for session:",
+        sessionId
+      );
       setTimeout(() => {
+        console.log(
+          "🎯 Timeout triggered - calling resolveTurn for session:",
+          sessionId
+        );
         this.resolveTurn(sessionId);
       }, session.turnTimeLimit * 1000);
 
@@ -327,6 +346,12 @@ export class DungeonEngine {
   }
 
   async resolveTurn(sessionId: string) {
+    console.log(
+      "🎯 resolveTurn called for session:",
+      sessionId,
+      "- THIS SHOULD NOT HAPPEN IN EVENT-BASED SYSTEM"
+    );
+    console.trace("🎯 resolveTurn call stack:");
     try {
       const session = await db.dungeonSession.findUnique({
         where: { id: sessionId },
@@ -382,13 +407,26 @@ export class DungeonEngine {
       });
 
       // Check win/lose conditions
+      console.log(
+        "🎯 resolveTurn checking win/lose conditions for session:",
+        sessionId
+      );
       const winCondition = await this.checkWinCondition(sessionId);
       const loseCondition = await this.checkLoseCondition(sessionId);
 
+      console.log("🎯 resolveTurn win/lose results:", {
+        sessionId,
+        winCondition,
+        loseCondition,
+        shouldEnd: winCondition || loseCondition,
+      });
+
       if (winCondition || loseCondition) {
+        console.log("🎯 resolveTurn ending dungeon due to win/lose condition");
         await this.endDungeon(sessionId, winCondition);
       } else {
         // Continue to next turn
+        console.log("🎯 resolveTurn continuing to next turn");
         await this.nextTurn(sessionId);
       }
 
@@ -512,13 +550,38 @@ export class DungeonEngine {
   }
 
   private async checkWinCondition(sessionId: string): Promise<boolean> {
-    // Implement win conditions based on mission type
-    // For now, simple turn-based win condition
+    // Check if all events in the timeline have been completed
     const session = await db.dungeonSession.findUnique({
       where: { id: sessionId },
+      include: {
+        events: true,
+      },
     });
 
-    return session ? session.currentTurn >= session.maxTurns : false;
+    if (!session) return false;
+
+    // Get all events for this session
+    const allEvents = session.events;
+
+    // Check if all events are completed
+    const completedEvents = allEvents.filter(
+      (event) => event.status === "COMPLETED"
+    );
+    const totalEvents = allEvents.length;
+
+    console.log("🎯 Checking win condition:", {
+      sessionId,
+      totalEvents,
+      completedEvents: completedEvents.length,
+      isComplete: completedEvents.length === totalEvents && totalEvents > 0,
+      eventStatuses: allEvents.map((e) => ({
+        id: e.id,
+        number: e.eventNumber,
+        status: e.status,
+      })),
+    });
+
+    return completedEvents.length === totalEvents && totalEvents > 0;
   }
 
   private async checkLoseCondition(sessionId: string): Promise<boolean> {
@@ -541,8 +604,16 @@ export class DungeonEngine {
     if (!session) return false;
 
     const aliveMembers = session.party.members.filter(
-      (member) => member.character.health > 0
+      (member) =>
+        (member.character.currentHealth ?? member.character.health) > 0
     );
+
+    console.log("🎯 Checking lose condition:", {
+      sessionId,
+      totalMembers: session.party.members.length,
+      aliveMembers: aliveMembers.length,
+      isDefeated: aliveMembers.length === 0,
+    });
 
     return aliveMembers.length === 0;
   }
@@ -558,8 +629,8 @@ export class DungeonEngine {
       },
     });
 
-    // Start next turn
-    await this.startTurn(sessionId);
+    // Start next turn - DISABLED: Using event-based system instead
+    // await this.startTurn(sessionId);
   }
 
   private async endDungeon(sessionId: string, success: boolean) {
@@ -678,7 +749,6 @@ export class DungeonEngine {
       );
 
       for (const member of participants) {
-        console.log("📊 Updating character stats for:", member.characterId);
         await statisticsService.updateCharacterStatistics(member.characterId, {
           success,
           timeSpent: dungeonStats.totalTimeSpent,
@@ -884,23 +954,15 @@ export class DungeonEngine {
     actionType: string,
     actionData: any
   ) {
-    console.log("🎮 Submitting event action:", {
-      eventId,
-      characterId,
-      actionType,
-      actionData,
-    });
     // Check if already submitted
     const existing = await db.dungeonPlayerAction.findUnique({
       where: { eventId_characterId: { eventId, characterId } },
     });
 
     if (existing) {
-      console.log("🎮 Action already submitted, skipping");
       throw new Error("Action already submitted");
     }
 
-    console.log("🎮 Creating new action in database");
     // Create action
     const action = await db.dungeonPlayerAction.create({
       data: {
@@ -910,8 +972,6 @@ export class DungeonEngine {
         actionData,
       },
     });
-
-    console.log("🎮 Action created successfully:", action.id);
 
     // Check if all players submitted
     const event = await db.dungeonEvent.findUnique({
@@ -1033,14 +1093,6 @@ export class DungeonEngine {
     const eventEndTime = Date.now();
     const timeSpent = Math.round((eventEndTime - eventStartTime) / 1000);
 
-    console.log("📊 About to update statistics:", {
-      sessionId: event.sessionId,
-      eventType: event.template?.type || "UNKNOWN",
-      success: results.success !== false,
-      timeSpent,
-      results,
-    });
-
     await statisticsService.updateDungeonEventStats(event.sessionId, {
       eventType: event.template?.type || "UNKNOWN",
       success: results.success !== false, // Default to success unless explicitly failed
@@ -1051,11 +1103,20 @@ export class DungeonEngine {
     // Determine next event (branching logic)
     const nextEventId = await this.selectNextEvent(event, results);
 
+    console.log("🎯 Event resolution - checking for next event:", {
+      eventId,
+      sessionId: event.sessionId,
+      nextEventId,
+      hasNextEvent: !!nextEventId,
+    });
+
     if (nextEventId) {
       // Continue to next event
+      console.log("🎯 Continuing to next event:", nextEventId);
       await this.startEvent(event.sessionId, nextEventId);
     } else {
       // End of timeline - check win conditions
+      console.log("🎯 No next event found - ending dungeon");
       await this.endDungeon(event.sessionId, true);
     }
   }
@@ -1072,6 +1133,8 @@ export class DungeonEngine {
         return await this.processPuzzleEvent(event);
       case "CHOICE":
         return await this.processChoiceEvent(event);
+      case "REST":
+        return await this.processRestEvent(event);
       case "BOSS":
         return await this.processBossEvent(event);
       case "NPC_ENCOUNTER":
@@ -1095,6 +1158,7 @@ export class DungeonEngine {
       experience: {},
       gold: {},
       itemsFound: 0,
+      partyHealthUpdates: {}, // New: track party health changes
     };
 
     // Check if this is a minigame result
@@ -1104,6 +1168,11 @@ export class DungeonEngine {
 
     if (minigameAction && minigameAction.actionData?.minigameResult) {
       const minigameResult = minigameAction.actionData.minigameResult;
+
+      console.log(
+        "🎮 [DungeonEngine] Processing combat minigame result:",
+        minigameResult
+      );
 
       // Use minigame results for combat processing
       results.enemiesDefeated = minigameResult.victory
@@ -1115,9 +1184,16 @@ export class DungeonEngine {
       const performanceBonus = Math.floor(minigameResult.damageDealt * 0.3);
       const timeBonus = minigameResult.timeTaken < 30000 ? 20 : 0; // Under 30 seconds
       const reviveBonus = minigameResult.playersRevived * 15;
+      const blockBonus = minigameResult.blocks * 5;
+      const parryBonus = minigameResult.parries * 10;
 
       const totalExperience =
-        baseExperience + performanceBonus + timeBonus + reviveBonus;
+        baseExperience +
+        performanceBonus +
+        timeBonus +
+        reviveBonus +
+        blockBonus +
+        parryBonus;
 
       // Distribute experience to all participating characters
       event.playerActions.forEach((action: any) => {
@@ -1132,6 +1208,15 @@ export class DungeonEngine {
           ([characterId, damage]) => {
             results.damageTaken[characterId] = damage as number;
           }
+        );
+      }
+
+      // Update party health from minigame result
+      if (minigameResult.partyHealthUpdates) {
+        results.partyHealthUpdates = minigameResult.partyHealthUpdates;
+        console.log(
+          "🎮 [DungeonEngine] Party health updates:",
+          minigameResult.partyHealthUpdates
         );
       }
 
@@ -1170,6 +1255,78 @@ export class DungeonEngine {
         results.experience[action.characterId] =
           (results.experience[action.characterId] || 0) + 5;
       }
+    }
+
+    return results;
+  }
+
+  private async processRestEvent(event: any): Promise<any> {
+    console.log(
+      "🏥 [DungeonEngine] Processing REST event:",
+      event.template?.name
+    );
+
+    const results = {
+      type: "rest",
+      healing: {},
+      experience: {},
+      gold: {},
+    };
+
+    // Get healing amount from event config
+    const healingAmount = event.template?.config?.healingAmount || 50; // Default 50%
+
+    // Get party members for this session
+    const session = await db.dungeonSession.findUnique({
+      where: { id: event.sessionId },
+      include: {
+        party: {
+          include: {
+            characters: true,
+          },
+        },
+      },
+    });
+
+    if (!session || !session.party) {
+      console.log("🏥 [DungeonEngine] No party found for REST event");
+      return results;
+    }
+
+    // Heal all party members
+    for (const character of session.party.characters) {
+      const currentHealth = character.currentHealth || character.maxHealth;
+      let newHealth: number;
+
+      if (healingAmount >= 100) {
+        // Full heal
+        newHealth = character.maxHealth;
+      } else {
+        // Percentage heal
+        const healAmount = Math.floor(
+          (character.maxHealth * healingAmount) / 100
+        );
+        newHealth = Math.min(currentHealth + healAmount, character.maxHealth);
+      }
+
+      // Update character health
+      await db.character.update({
+        where: { id: character.id },
+        data: {
+          currentHealth: newHealth,
+        },
+      });
+
+      results.healing[character.id] = newHealth - currentHealth;
+      results.experience[character.id] =
+        event.template?.outcomes?.rest?.experience || 5;
+
+      console.log("🏥 [DungeonEngine] Healed character:", {
+        name: character.name,
+        oldHealth: currentHealth,
+        newHealth,
+        healAmount: newHealth - currentHealth,
+      });
     }
 
     return results;
@@ -1377,18 +1534,50 @@ export class DungeonEngine {
   private async applyEventResults(results: any, event: any) {
     console.log("🎯 Applying event results:", results);
 
-    // Apply damage taken to characters (damageTaken is damage received)
-    for (const [characterId, damage] of Object.entries(
-      results.damageTaken || {}
-    )) {
-      await db.character.update({
-        where: { id: characterId },
-        data: { health: { decrement: damage as number } },
-      });
+    // Apply party health updates from combat minigame (new system)
+    if (results.partyHealthUpdates) {
+      console.log(
+        "🎯 Applying party health updates:",
+        results.partyHealthUpdates
+      );
+      for (const [characterId, newHealth] of Object.entries(
+        results.partyHealthUpdates
+      )) {
+        await db.character.update({
+          where: { id: characterId },
+          data: { currentHealth: newHealth as number },
+        });
+      }
+    } else if (results.healing) {
+      // Apply healing from REST events
+      console.log("🎯 Applying healing:", results.healing);
+      for (const [characterId, healAmount] of Object.entries(results.healing)) {
+        const character = await db.character.findUnique({
+          where: { id: characterId },
+        });
+        if (character) {
+          const currentHealth = character.currentHealth || character.maxHealth;
+          const newHealth = Math.min(
+            currentHealth + (healAmount as number),
+            character.maxHealth
+          );
+          await db.character.update({
+            where: { id: characterId },
+            data: { currentHealth: newHealth },
+          });
+        }
+      }
+    } else {
+      // Legacy: Apply damage taken to characters (damageTaken is damage received)
+      for (const [characterId, damage] of Object.entries(
+        results.damageTaken || {}
+      )) {
+        await db.character.update({
+          where: { id: characterId },
+          data: { health: { decrement: damage as number } },
+        });
+      }
     }
-
-    // Note: damageDealt is damage dealt to enemies, not healing
-    // Healing would be a separate property if we implement it
 
     // Apply gold rewards
     for (const [characterId, gold] of Object.entries(results.gold || {})) {
@@ -1419,39 +1608,121 @@ export class DungeonEngine {
     event: any,
     results: any
   ): Promise<string | null> {
+    console.log("🎯 selectNextEvent called:", {
+      eventId: event.id,
+      eventNumber: event.eventNumber,
+      sessionId: event.sessionId,
+    });
+
+    // Debug: Show all events in this session
+    const allSessionEvents = await db.dungeonEvent.findMany({
+      where: { sessionId: event.sessionId },
+      select: {
+        id: true,
+        eventNumber: true,
+        status: true,
+        parentEventId: true,
+      },
+      orderBy: { eventNumber: "asc" },
+    });
+    console.log("🎯 All events in session:", allSessionEvents);
+
     // Check child events (branches)
     const children = await db.dungeonEvent.findMany({
       where: { parentEventId: event.id },
     });
 
+    console.log("🎯 Found child events:", children.length);
+
     if (children.length === 0) {
       // Linear path - next event by number
+      // Look for the next sequential integer event number
+      const nextEventNumber = Math.floor(event.eventNumber) + 1;
+
       const nextEvent = await db.dungeonEvent.findFirst({
         where: {
           sessionId: event.sessionId,
-          eventNumber: event.eventNumber + 1,
+          eventNumber: nextEventNumber,
           parentEventId: null,
         },
       });
+
+      console.log("🎯 Linear path - next event:", {
+        currentEventNumber: event.eventNumber,
+        lookingForEventNumber: nextEventNumber,
+        foundEvent: nextEvent?.id || null,
+        foundEventNumber: nextEvent?.eventNumber,
+      });
+
       return nextEvent?.id || null;
     }
 
     // Branching - select based on results
     // Example: if fled, take escape route; if fought, continue main path
     const selectedBranch = this.evaluateBranchCondition(children, results);
-    return selectedBranch?.id || null;
+
+    if (selectedBranch) {
+      console.log("🎯 Branch selected:", selectedBranch.id);
+      return selectedBranch.id;
+    } else {
+      // No branch selected, continue with main path
+      console.log("🎯 No branch selected, continuing main path");
+      const nextEventNumber = Math.floor(event.eventNumber) + 1;
+
+      const nextEvent = await db.dungeonEvent.findFirst({
+        where: {
+          sessionId: event.sessionId,
+          eventNumber: nextEventNumber,
+          parentEventId: null,
+        },
+      });
+
+      console.log("🎯 Main path continuation - next event:", {
+        currentEventNumber: event.eventNumber,
+        lookingForEventNumber: nextEventNumber,
+        foundEvent: nextEvent?.id || null,
+        foundEventNumber: nextEvent?.eventNumber,
+      });
+
+      return nextEvent?.id || null;
+    }
   }
 
   private evaluateBranchCondition(children: any[], results: any): any {
+    console.log("🎯 evaluateBranchCondition called:", {
+      childrenCount: children.length,
+      resultsType: results.type,
+      children: children.map((c) => ({
+        id: c.id,
+        type: c.template?.type,
+        eventNumber: c.eventNumber,
+      })),
+    });
+
     // Simple branching logic - can be expanded
     if (results.type === "combat" && results.victory) {
-      return children.find((c) => c.template?.type === "TREASURE");
+      const treasureBranch = children.find(
+        (c) => c.template?.type === "TREASURE"
+      );
+      console.log(
+        "🎯 Combat victory - selecting treasure branch:",
+        treasureBranch?.id
+      );
+      return treasureBranch;
     } else if (results.type === "choice" && results.reputation) {
-      return children.find((c) => c.template?.type === "NPC_ENCOUNTER");
+      const npcBranch = children.find(
+        (c) => c.template?.type === "NPC_ENCOUNTER"
+      );
+      console.log(
+        "🎯 Choice with reputation - selecting NPC branch:",
+        npcBranch?.id
+      );
+      return npcBranch;
     }
 
-    // Default to first child
-    return children[0];
+    // Default to main path (no branch selected)
+    console.log("🎯 No specific branch condition met - continuing main path");
+    return null;
   }
 
   private async applyExperienceAndLevelUp(
