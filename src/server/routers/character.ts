@@ -44,6 +44,130 @@ export const characterRouter = createTRPCRouter({
     return character;
   }),
 
+  getCurrentCharacter: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: {
+        id: true,
+        name: true,
+        level: true,
+        currentHealth: true,
+        maxHealth: true,
+        attack: true,
+        defense: true,
+        speed: true,
+        perception: true,
+        experience: true,
+        gold: true,
+      },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    return character;
+  }),
+
+  // Update character health (for real-time combat updates)
+  updateHealth: protectedProcedure
+    .input(
+      z.object({
+        characterId: z.string(),
+        newHealth: z.number().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the character belongs to the current user
+      const character = await ctx.db.character.findFirst({
+        where: {
+          id: input.characterId,
+          userId: ctx.session.user.id,
+        },
+      });
+
+      if (!character) {
+        throw new Error("Character not found or access denied");
+      }
+
+      // Update the character's health
+      const updatedCharacter = await ctx.db.character.update({
+        where: { id: input.characterId },
+        data: { currentHealth: input.newHealth },
+        select: {
+          id: true,
+          name: true,
+          currentHealth: true,
+          maxHealth: true,
+        },
+      });
+
+      return updatedCharacter;
+    }),
+
+  // Rest to restore health
+  rest: protectedProcedure
+    .input(
+      z.object({
+        restType: z.enum(["quick", "full"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is already at full health
+      if (character.currentHealth >= character.maxHealth) {
+        throw new Error("Character is already at full health");
+      }
+
+      let healthRestored = 0;
+      let goldCost = 0;
+
+      if (input.restType === "quick") {
+        // Quick rest: restore 50% health instantly, costs 10 gold
+        healthRestored = Math.floor(
+          (character.maxHealth - character.currentHealth) * 0.5
+        );
+        goldCost = 10;
+      } else if (input.restType === "full") {
+        // Full rest: restore 100% health, costs 25 gold
+        healthRestored = character.maxHealth - character.currentHealth;
+        goldCost = 25;
+      }
+
+      // Check if character has enough gold
+      if (character.gold < goldCost) {
+        throw new Error(
+          `Not enough gold. Need ${goldCost} gold for ${input.restType} rest.`
+        );
+      }
+
+      // Apply rest
+      const updatedCharacter = await ctx.db.character.update({
+        where: { userId: ctx.session.user.id },
+        data: {
+          currentHealth: Math.min(
+            character.maxHealth,
+            character.currentHealth + healthRestored
+          ),
+          gold: character.gold - goldCost,
+        },
+      });
+
+      return {
+        healthRestored,
+        goldCost,
+        newHealth: updatedCharacter.currentHealth,
+        newGold: updatedCharacter.gold,
+      };
+    }),
+
   // Create new character
   create: protectedProcedure
     .input(
@@ -222,12 +346,12 @@ export const characterRouter = createTRPCRouter({
         // Heal the character
         const newHealth = Math.min(
           inventoryItem.character.maxHealth,
-          inventoryItem.character.health + item.healing
+          inventoryItem.character.currentHealth + item.healing
         );
 
         await ctx.db.character.update({
           where: { id: inventoryItem.characterId },
-          data: { health: newHealth },
+          data: { currentHealth: newHealth },
         });
 
         // Remove item from inventory

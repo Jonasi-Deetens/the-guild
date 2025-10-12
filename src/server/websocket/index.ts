@@ -39,8 +39,6 @@ export interface ServerToClientEvents {
   dungeonStarted: (data: {
     sessionId: string;
     missionName: string;
-    turnTimeLimit: number;
-    timeline?: any;
     currentEvent?: any;
   }) => void;
   turnStarted: (data: {
@@ -73,7 +71,10 @@ export interface ServerToClientEvents {
 
   eventCompleted: (data: { eventId: string; results: any }) => void;
 
-  timelineUpdated: (data: { timeline: any; currentEventId: string }) => void;
+  sessionUpdated: (data: {
+    currentEventId: string;
+    sessionStatus: string;
+  }) => void;
 
   // Trade events
   tradeRequest: (data: {

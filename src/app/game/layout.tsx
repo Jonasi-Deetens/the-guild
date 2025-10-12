@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -32,6 +33,8 @@ interface GameLayoutProps {
 }
 
 export default function GameLayout({ children }: GameLayoutProps) {
+  const pathname = usePathname();
+  const isDungeonPage = pathname?.includes("/game/dungeon/");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statisticsOpen, setStatisticsOpen] = useState(false);
@@ -93,6 +96,36 @@ export default function GameLayout({ children }: GameLayoutProps) {
     }
   }, [levelUpNotification, experienceUpdateNotification, utils]);
 
+  // If we're in a dungeon page, render children directly without the game layout
+  if (isDungeonPage) {
+    return (
+      <>
+        {children}
+        {/* Still show level up notifications and modals */}
+        <LevelUpNotification
+          notification={levelUpNotification}
+          onClose={() => setLevelUpNotification(null)}
+        />
+        <Inventory
+          isOpen={inventoryOpen}
+          onClose={() => setInventoryOpen(false)}
+        />
+        <StatisticsPanel
+          isOpen={statisticsOpen}
+          onClose={() => setStatisticsOpen(false)}
+        />
+        <LevelUpPanel
+          isOpen={showLevelUpPanel}
+          onClose={async () => {
+            setShowLevelUpPanel(false);
+            await utils.character.getCurrent.invalidate();
+            await utils.character.canLevelUp.invalidate();
+          }}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
       {/* Sidebar */}
@@ -142,7 +175,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
                       <span className="text-sm text-stone-300">Health</span>
                       <span className="text-sm font-semibold text-red-400 flex items-center">
                         <Heart className="h-4 w-4 mr-1" />
-                        {character.health}/{character.maxHealth}
+                        {character.currentHealth}/{character.maxHealth}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">

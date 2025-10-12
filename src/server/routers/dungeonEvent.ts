@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/context";
-import { dungeonEngine } from "@/server/services/dungeonEngine";
+import { DungeonEngine } from "@/server/services/dungeonEngine";
+
+const dungeonEngine = new DungeonEngine();
 
 export const dungeonEventRouter = createTRPCRouter({
   // Get current event for a session
@@ -59,13 +61,13 @@ export const dungeonEventRouter = createTRPCRouter({
       return { success: true };
     }),
 
-  // Get timeline for a session
-  getTimeline: protectedProcedure
+  // Get session events (replaces timeline)
+  getSessionEvents: protectedProcedure
     .input(z.object({ sessionId: z.string() }))
     .query(async ({ ctx, input }) => {
       const session = await ctx.db.dungeonSession.findUnique({
         where: { id: input.sessionId },
-        select: { timeline: true, currentEventId: true },
+        select: { currentEventId: true },
       });
 
       if (!session) throw new Error("Session not found");
@@ -77,7 +79,6 @@ export const dungeonEventRouter = createTRPCRouter({
       });
 
       return {
-        timeline: session.timeline,
         currentEventId: session.currentEventId,
         events,
       };
@@ -135,7 +136,7 @@ export const dungeonEventRouter = createTRPCRouter({
         select: {
           id: true,
           name: true,
-          health: true,
+          currentHealth: true,
           maxHealth: true,
           attack: true,
           defense: true,

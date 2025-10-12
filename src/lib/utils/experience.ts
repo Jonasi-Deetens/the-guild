@@ -177,3 +177,4 @@ export function generateXPTable(): Array<{
 
   return table;
 }
+

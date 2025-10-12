@@ -29,10 +29,12 @@ interface MinigameContainerProps {
   partyMembers?: Array<{
     id: string;
     name: string;
-    health: number;
+    currentHealth: number;
     maxHealth: number;
     attack: number;
     defense: number;
+    agility?: number;
+    blockStrength?: number;
   }>;
 }
 

@@ -46,6 +46,7 @@ export default function HubPage() {
   // tRPC queries and mutations
   const createPartyMutation = api.party.create.useMutation();
   const leavePartyMutation = api.party.leave.useMutation();
+  const restMutation = api.character.rest.useMutation();
   const { data: myCurrentParty, refetch: refetchMyParty } =
     api.party.getMyCurrent.useQuery();
   const { data: character } = api.character.getCurrent.useQuery();
@@ -322,8 +323,127 @@ export default function HubPage() {
           </Card>
         </div>
 
-        {/* Right Column - Missions & Stats */}
+        {/* Right Column - Character Stats, Missions & Stats */}
         <div className="space-y-6">
+          {/* Character Stats */}
+          {character && (
+            <Card className="glass">
+              <CardHeader>
+                <CardTitle className="flex items-center">
+                  <Heart className="h-5 w-5 mr-2 text-red-400" />
+                  Character Status
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {/* Health Bar */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm text-gray-400">Health</span>
+                      <span className="text-sm text-white">
+                        {character.currentHealth}/{character.maxHealth}
+                      </span>
+                    </div>
+                    <div className="w-full bg-gray-700 rounded-full h-2">
+                      <div
+                        className="bg-red-500 h-2 rounded-full transition-all duration-300"
+                        style={{
+                          width: `${
+                            (character.currentHealth / character.maxHealth) *
+                            100
+                          }%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Level:</span>
+                      <span className="text-white font-semibold">
+                        {character.level}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Gold:</span>
+                      <span className="text-yellow-400 font-semibold">
+                        {character.gold}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Attack:</span>
+                      <span className="text-white">{character.attack}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-gray-400">Defense:</span>
+                      <span className="text-white">{character.defense}</span>
+                    </div>
+                  </div>
+
+                  {/* Rest Actions */}
+                  {character.currentHealth < character.maxHealth && (
+                    <div className="pt-4 border-t border-gray-700">
+                      <div className="flex space-x-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            restMutation.mutate(
+                              { restType: "quick" },
+                              {
+                                onSuccess: () => {
+                                  // Refresh character data
+                                  window.location.reload();
+                                },
+                                onError: (error) => {
+                                  alert(error.message);
+                                },
+                              }
+                            );
+                          }}
+                          disabled={
+                            restMutation.isPending || character.gold < 10
+                          }
+                          className="flex-1"
+                        >
+                          Quick Rest (10g)
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => {
+                            restMutation.mutate(
+                              { restType: "full" },
+                              {
+                                onSuccess: () => {
+                                  // Refresh character data
+                                  window.location.reload();
+                                },
+                                onError: (error) => {
+                                  alert(error.message);
+                                },
+                              }
+                            );
+                          }}
+                          disabled={
+                            restMutation.isPending || character.gold < 25
+                          }
+                          className="flex-1"
+                        >
+                          Full Rest (25g)
+                        </Button>
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        Quick rest restores 50% health. Full rest restores 100%
+                        health.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
           <Card className="glass">
             <CardHeader>
               <CardTitle className="flex items-center">

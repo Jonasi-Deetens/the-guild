@@ -109,7 +109,6 @@ export class CombatStateManager {
     this.contributionByPlayer = {};
     this.damageLog = [];
     this.blockStates = {};
-
   }
 
   /**
@@ -193,6 +192,7 @@ export class CombatStateManager {
     // Apply damage
     const newHealth = Math.max(0, target.currentHealth - damage);
     target.currentHealth = newHealth;
+
     target.isDead = newHealth === 0;
 
     // Update stats
@@ -300,8 +300,8 @@ export class CombatStateManager {
     // Dynamic windows based on monster attack speed
     // Faster monsters = shorter, more challenging windows
     // Slower monsters = longer, more forgiving windows
-    const baseParryWindow = 300; // Base 300ms parry window
-    const baseBlockWindow = 1000; // Base 1s block window
+    const baseParryWindow = 500; // Base 500ms parry window (increased from 300ms)
+    const baseBlockWindow = 1500; // Base 1.5s block window (increased from 1000ms)
 
     // Attack speed multiplier: 0.5x to 2.0x (from attackSpeed field)
     const speedMultiplier = Math.max(
@@ -335,6 +335,9 @@ export class CombatStateManager {
     const warningTime = 2000; // 2 seconds warning
     const attackTime = now + warningTime;
 
+    // Clear any previous block status when showing new block button
+    this.clearBlockStatus(monsterId);
+
     this.blockStates[monsterId] = {
       monsterId,
       isVisible: true,
@@ -342,7 +345,6 @@ export class CombatStateManager {
       attackTime,
       isHolding: false,
     };
-
   }
 
   /**
@@ -352,6 +354,16 @@ export class CombatStateManager {
     if (this.blockStates[monsterId]) {
       this.blockStates[monsterId].isVisible = false;
       this.blockStates[monsterId].isHolding = false;
+    }
+  }
+
+  /**
+   * Clear block status for a monster (after attack is processed)
+   */
+  clearBlockStatus(monsterId: string): void {
+    if (this.blockStates[monsterId]) {
+      this.blockStates[monsterId].blockStatus = "none";
+      this.blockStates[monsterId].clickTime = undefined;
     }
   }
 
@@ -427,8 +439,8 @@ export class CombatStateManager {
     const progress = Math.max(0, Math.min(1, elapsed / totalWarningTime));
 
     // Dynamic windows based on monster attack speed
-    const baseParryWindow = 300; // Base 300ms parry window
-    const baseBlockWindow = 1000; // Base 1s block window
+    const baseParryWindow = 500; // Base 500ms parry window (increased from 300ms)
+    const baseBlockWindow = 1500; // Base 1.5s block window (increased from 1000ms)
 
     // Attack speed multiplier: 0.5x to 2.0x (from attackSpeed field)
     const speedMultiplier = Math.max(

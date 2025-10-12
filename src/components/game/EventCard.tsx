@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { MinigameContainer, getMinigameTypeForEvent } from "../minigames";
+import { MinigameContainer, getMinigameTypeForEvent } from "./minigames";
 
 interface EventCardProps {
   event: {
@@ -36,7 +36,7 @@ interface EventCardProps {
   partyMembers?: Array<{
     id: string;
     name: string;
-    health: number;
+    currentHealth: number;
     maxHealth: number;
     attack: number;
     defense: number;
@@ -596,6 +596,10 @@ export function EventCard({
             {event.template?.description ||
               `A ${eventType.toLowerCase()} event`}
           </p>
+          <p className="text-xs text-gray-500">
+            Status: {event.status} | ID: {event.id} | Actions:{" "}
+            {event.playerActions.length}
+          </p>
         </div>
       </div>
 
@@ -634,6 +638,9 @@ export function EventCard({
                   {action.character?.name || "Unknown Player"}
                 </span>
                 : {action.actionType}
+                <span className="text-xs text-gray-500 ml-2">
+                  (Event: {event.id}, Action: {action.id})
+                </span>
               </div>
             ))}
           </div>
@@ -872,9 +879,15 @@ export function EventCard({
       )}
 
       {hasSubmitted && (
-        <div className="text-center p-4 bg-green-900/20 border border-green-500 rounded-lg">
-          <p className="text-green-400 font-semibold">Action Submitted!</p>
-          <p className="text-gray-300 text-sm">Waiting for other players...</p>
+        <div className="text-center p-4 bg-blue-900/20 border border-blue-500 rounded-lg">
+          <p className="text-blue-400 font-semibold">Action Submitted!</p>
+          <p className="text-gray-300 text-sm">
+            {event.status === "RESOLVING"
+              ? "Resolving event..."
+              : event.status === "COMPLETED"
+              ? "Event completed!"
+              : "Processing your action..."}
+          </p>
         </div>
       )}
 

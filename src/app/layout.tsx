@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import AuthProvider from "@/components/providers/SessionProvider";
 import { TRPCReactProvider } from "@/trpc/react";
+import "@/lib/startup"; // Initialize mission system services
 
 const inter = Inter({ subsets: ["latin"] });
 

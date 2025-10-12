@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Heart, Sword, Shield, Zap, Star, Crown } from "@/components/icons";
 import { api } from "@/trpc/react";
+import { useDungeonSession } from "@/contexts/DungeonSessionContext";
 import {
   CombatStateManager,
   type CombatPartyMember,
@@ -29,7 +30,7 @@ interface CombatClickerGameProps {
   partyMembers: Array<{
     id: string;
     name: string;
-    health: number;
+    currentHealth: number;
     maxHealth: number;
     attack: number;
     defense: number;
@@ -83,6 +84,17 @@ export function CombatClickerGame({
   const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
   const attackTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Get refetch function from context
+  const { refetchCharacter } = useDungeonSession();
+
+  // Mutation to update character health in real-time
+  const updateCharacterHealth = api.character.updateHealth.useMutation({
+    onSuccess: () => {
+      // Trigger a refetch of character data to update the party sidebar
+      refetchCharacter();
+    },
+  });
+
   // Generate monsters using tRPC
   const { data: monsters, isLoading: monstersLoading } =
     api.monster.generateCombatMonsters.useQuery(
@@ -116,13 +128,13 @@ export function CombatClickerGame({
       const combatParty: CombatPartyMember[] = partyMembers.map((member) => ({
         id: member.id,
         name: member.name,
-        currentHealth: member.health,
+        currentHealth: member.currentHealth,
         maxHealth: member.maxHealth,
         attack: member.attack,
         defense: member.defense,
-        agility: member.agility,
-        blockStrength: member.blockStrength,
-        isDead: false,
+        agility: member.agility || 5,
+        blockStrength: member.blockStrength || 3,
+        isDead: member.currentHealth <= 0,
       }));
 
       // Initialize combat
@@ -161,6 +173,47 @@ export function CombatClickerGame({
       }
     };
   }, [gameState.gameActive, gameState.gameOver]);
+
+  // Game completion check
+  useEffect(() => {
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
+      return;
+
+    const checkGameCompletion = () => {
+      const gameEnd = combatManager.current?.checkGameEnd();
+      if (gameEnd?.isOver) {
+        console.log("🎮 [CombatClickerGame] Game completed:", gameEnd);
+
+        // Get final combat result
+        const combatResult = combatManager.current?.getCombatResult();
+
+        // Update game state to show game over screen
+        setGameState((prev) => ({
+          ...prev,
+          gameOver: true,
+          victory: gameEnd.victory,
+        }));
+
+        // Call onComplete callback after a short delay to show the game over screen
+        setTimeout(() => {
+          if (combatResult) {
+            console.log(
+              "🎮 [CombatClickerGame] Calling onComplete with result:",
+              combatResult
+            );
+            onComplete(combatResult);
+          }
+        }, 2000); // Show game over screen for 2 seconds before completing
+      }
+    };
+
+    // Check for completion every 500ms
+    const completionCheckInterval = setInterval(checkGameCompletion, 500);
+
+    return () => {
+      clearInterval(completionCheckInterval);
+    };
+  }, [gameState.gameActive, gameState.gameOver, onComplete]);
 
   // Monster attack timer
   useEffect(() => {
@@ -231,17 +284,35 @@ export function CombatClickerGame({
       aliveMembers[Math.floor(Math.random() * aliveMembers.length)];
 
     // Get the stored block status from when player clicked
-    const blockState = gameState.blockStates[monsterId];
+    // Use the combat manager's state instead of React state for accuracy
+    const combatState = combatManager.current.getState();
+    const blockState = combatState.blockStates[monsterId];
     const blockStatus = blockState?.blockStatus || "none";
 
-    // Process attack
+    // Process attack (this updates the local combat state)
     const result = combatManager.current.processMonsterAttack(
       monsterId,
       target.id,
       blockStatus
     );
 
-    // Hide block button
+    // Update character health in database if damage was taken
+    // Only update the database, don't double-apply damage
+    if (result.damage > 0) {
+      // Get the updated health from the combat manager's state
+      const updatedParty = combatManager.current.getState().party;
+      const updatedTarget = updatedParty.find(
+        (member) => member.id === target.id
+      );
+      if (updatedTarget) {
+        updateCharacterHealth.mutate({
+          characterId: target.id,
+          newHealth: updatedTarget.currentHealth,
+        });
+      }
+    }
+
+    // Hide block button (don't clear block status yet - it will be cleared when next block button appears)
     combatManager.current.hideBlockButton(monsterId);
 
     // Update state
@@ -289,6 +360,7 @@ export function CombatClickerGame({
     const clickTime = Date.now();
 
     // Register the block attempt in the combat manager
+    // This will store the block status for the upcoming attack
     combatManager.current.registerBlockAttempt(monsterId, clickTime);
 
     // Update UI state
@@ -501,7 +573,7 @@ export function CombatClickerGame({
         {gameState.monsters.map((monster) => (
           <div
             key={monster.id}
-            className={`relative bg-red-900/50 border-2 rounded-lg p-4 transition-all duration-200 ${getRarityColor(
+            className={`relative bg-red-900/50 border-2 rounded-lg transition-all duration-200 ${getRarityColor(
               monster.rarity
             )} ${
               monster.health > 0
@@ -509,155 +581,157 @@ export function CombatClickerGame({
                 : "border-gray-600 bg-gray-800/50"
             }`}
           >
-            <div className="text-center">
-              <div className="flex items-center justify-center space-x-2 mb-2">
-                <span className="text-4xl">
-                  {getMonsterTypeIcon(monster.type)}
-                </span>
-                {getRarityIcon(monster.rarity)}
+            {/* Fixed height container to prevent layout shifts */}
+            <div className="h-80 flex flex-col">
+              {/* Monster Info Section - Fixed height */}
+              <div className="flex-1 p-4 text-center">
+                <div className="flex items-center justify-center space-x-2 mb-2">
+                  <span className="text-4xl">
+                    {getMonsterTypeIcon(monster.type)}
+                  </span>
+                  {getRarityIcon(monster.rarity)}
+                </div>
+                <h4 className="text-lg font-semibold text-white mb-1">
+                  {monster.name}
+                </h4>
+                <div className="text-xs text-gray-300 mb-2">
+                  {monster.type} • {monster.rarity}
+                </div>
+                <div className="text-xs text-gray-400 mb-2">
+                  Speed: {(monster.attackInterval / 1000).toFixed(1)}s • Attack:{" "}
+                  {monster.attack} • Defense: {monster.defense}
+                </div>
+
+                {/* Health Bar */}
+                <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
+                  <div
+                    className={`h-3 rounded-full transition-all duration-300 ${
+                      monster.health > monster.maxHealth * 0.5
+                        ? "bg-green-500"
+                        : monster.health > monster.maxHealth * 0.25
+                        ? "bg-yellow-500"
+                        : "bg-red-500"
+                    }`}
+                    style={{
+                      width: `${(monster.health / monster.maxHealth) * 100}%`,
+                    }}
+                  />
+                </div>
+                <p className="text-sm text-gray-300 mb-3">
+                  {monster.health}/{monster.maxHealth} HP
+                </p>
               </div>
-              <h4 className="text-lg font-semibold text-white mb-1">
-                {monster.name}
-              </h4>
-              <div className="text-xs text-gray-300 mb-2">
-                {monster.type} • {monster.rarity}
-              </div>
-              <div className="text-xs text-gray-400 mb-2">
-                Speed: {(monster.attackInterval / 1000).toFixed(1)}s • Attack:{" "}
-                {monster.attack} • Defense: {monster.defense}
-              </div>
 
-              {/* Health Bar */}
-              <div className="w-full bg-gray-700 rounded-full h-3 mb-2">
-                <div
-                  className={`h-3 rounded-full transition-all duration-300 ${
-                    monster.health > monster.maxHealth * 0.5
-                      ? "bg-green-500"
-                      : monster.health > monster.maxHealth * 0.25
-                      ? "bg-yellow-500"
-                      : "bg-red-500"
-                  }`}
-                  style={{
-                    width: `${(monster.health / monster.maxHealth) * 100}%`,
-                  }}
-                />
-              </div>
-              <p className="text-sm text-gray-300 mb-3">
-                {monster.health}/{monster.maxHealth} HP
-              </p>
+              {/* Action Area - Fixed height with reserved space */}
+              <div className="h-32 p-4 border-t border-gray-600/30">
+                <div className="h-full flex flex-col justify-between">
+                  {/* Attack Button - Always present when monster is alive */}
+                  {monster.health > 0 && (
+                    <button
+                      onClick={() => handleMonsterClick(monster.id)}
+                      className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition-colors"
+                    >
+                      Attack
+                    </button>
+                  )}
 
-              {/* Attack Button */}
-              {monster.health > 0 && (
-                <button
-                  onClick={() => handleMonsterClick(monster.id)}
-                  className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 font-semibold transition-colors"
-                >
-                  Attack
-                </button>
-              )}
+                  {/* Block Section - Reserved space to prevent shifts */}
+                  <div className="h-16 flex flex-col justify-center">
+                    {gameState.blockStates[monster.id]?.isVisible &&
+                      (() => {
+                        const timingState =
+                          combatManager.current?.getBlockTimingState(
+                            monster.id
+                          );
+                        const isHolding =
+                          gameState.blockStates[monster.id]?.isHolding;
 
-              {/* Block Button with Visual Feedback */}
-              {gameState.blockStates[monster.id]?.isVisible &&
-                (() => {
-                  const timingState =
-                    combatManager.current?.getBlockTimingState(monster.id);
-                  const isHolding =
-                    gameState.blockStates[monster.id]?.isHolding;
+                        // Determine button color based on timing
+                        let buttonClass =
+                          "w-full px-4 py-2 rounded font-semibold transition-all duration-100 ";
+                        let buttonText = "Block!";
 
-                  // Determine button color based on timing
-                  let buttonClass =
-                    "w-full mt-2 px-4 py-2 rounded font-semibold transition-all duration-100 ";
-                  let buttonText = "Block!";
+                        if (isHolding) {
+                          buttonClass += "bg-blue-700 text-blue-200";
+                          buttonText = "Blocking...";
+                        } else if (timingState?.isInParryWindow) {
+                          buttonClass +=
+                            "bg-yellow-500 text-yellow-900 animate-pulse shadow-lg shadow-yellow-500/50";
+                          buttonText = "PARRY NOW!";
+                        } else if (timingState?.isInBlockWindow) {
+                          buttonClass +=
+                            "bg-green-600 text-white hover:bg-green-700";
+                          buttonText = "Block!";
+                        } else {
+                          buttonClass +=
+                            "bg-blue-600 text-white hover:bg-blue-700";
+                          buttonText = "Block!";
+                        }
 
-                  if (isHolding) {
-                    buttonClass += "bg-blue-700 text-blue-200";
-                    buttonText = "Blocking...";
-                  } else if (timingState?.isInParryWindow) {
-                    buttonClass +=
-                      "bg-yellow-500 text-yellow-900 animate-pulse shadow-lg shadow-yellow-500/50";
-                    buttonText = "PARRY NOW!";
-                  } else if (timingState?.isInBlockWindow) {
-                    buttonClass += "bg-green-600 text-white hover:bg-green-700";
-                    buttonText = "Block!";
-                  } else {
-                    buttonClass += "bg-blue-600 text-white hover:bg-blue-700";
-                    buttonText = "Block!";
-                  }
-
-                  return (
-                    <div className="space-y-2">
-                      {/* Timing Progress Bar */}
-                      <div className="w-full bg-gray-700 rounded-full h-2">
-                        <div
-                          className={`h-2 rounded-full transition-all duration-100 ${
-                            timingState?.isInParryWindow
-                              ? "bg-yellow-400"
-                              : timingState?.isInBlockWindow
-                              ? "bg-green-400"
-                              : "bg-blue-400"
-                          }`}
-                          style={{
-                            width: `${(timingState?.progress || 0) * 100}%`,
-                          }}
-                        />
-                      </div>
-
-                      {/* Time Display */}
-                      {timingState && timingState.timeUntilAttack > 0 && (
-                        <div className="text-xs text-center text-gray-300 space-y-1">
-                          {timingState.isInParryWindow ? (
-                            <div>
-                              <span className="text-yellow-400 font-bold">
-                                PARRY WINDOW!{" "}
-                                {(timingState.timeUntilAttack / 1000).toFixed(
-                                  1
-                                )}
-                                s
-                              </span>
-                              <div className="text-yellow-300">
-                                ({timingState.parryWindow}ms window)
-                              </div>
+                        return (
+                          <div className="space-y-1">
+                            {/* Timing Progress Bar */}
+                            <div className="w-full bg-gray-700 rounded-full h-1">
+                              <div
+                                className={`h-1 rounded-full transition-all duration-100 ${
+                                  timingState?.isInParryWindow
+                                    ? "bg-yellow-400"
+                                    : timingState?.isInBlockWindow
+                                    ? "bg-green-400"
+                                    : "bg-blue-400"
+                                }`}
+                                style={{
+                                  width: `${
+                                    (timingState?.progress || 0) * 100
+                                  }%`,
+                                }}
+                              />
                             </div>
-                          ) : timingState.isInBlockWindow ? (
-                            <div>
-                              <span className="text-green-400">
-                                Block Window:{" "}
-                                {(timingState.timeUntilAttack / 1000).toFixed(
-                                  1
-                                )}
-                                s
-                              </span>
-                              <div className="text-green-300">
-                                ({timingState.blockWindow}ms window)
-                              </div>
-                            </div>
-                          ) : (
-                            <div>
-                              <span className="text-blue-400">
-                                Warning:{" "}
-                                {(timingState.timeUntilAttack / 1000).toFixed(
-                                  1
-                                )}
-                                s
-                              </span>
-                              <div className="text-blue-300">
-                                (Speed: {timingState.attackSpeed.toFixed(1)}x)
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )}
 
-                      {/* Block Button */}
-                      <button
-                        onClick={() => handleBlockClick(monster.id)}
-                        className={buttonClass}
-                      >
-                        {buttonText}
-                      </button>
-                    </div>
-                  );
-                })()}
+                            {/* Time Display - Compact */}
+                            {timingState && timingState.timeUntilAttack > 0 && (
+                              <div className="text-xs text-center text-gray-300">
+                                {timingState.isInParryWindow ? (
+                                  <span className="text-yellow-400 font-bold">
+                                    PARRY!{" "}
+                                    {(
+                                      timingState.timeUntilAttack / 1000
+                                    ).toFixed(1)}
+                                    s
+                                  </span>
+                                ) : timingState.isInBlockWindow ? (
+                                  <span className="text-green-400">
+                                    Block:{" "}
+                                    {(
+                                      timingState.timeUntilAttack / 1000
+                                    ).toFixed(1)}
+                                    s
+                                  </span>
+                                ) : (
+                                  <span className="text-blue-400">
+                                    Warning:{" "}
+                                    {(
+                                      timingState.timeUntilAttack / 1000
+                                    ).toFixed(1)}
+                                    s
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Block Button */}
+                            <button
+                              onClick={() => handleBlockClick(monster.id)}
+                              className={buttonClass}
+                            >
+                              {buttonText}
+                            </button>
+                          </div>
+                        );
+                      })()}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         ))}
