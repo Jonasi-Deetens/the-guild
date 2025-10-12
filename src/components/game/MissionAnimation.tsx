@@ -65,6 +65,13 @@ export function MissionAnimation({
         { text: "Seeking shelter from the sun...", duration: 2000 },
         { text: "Navigating the vast desert...", duration: 3000 },
       ],
+      training_ground: [
+        { text: "Practicing combat techniques...", duration: 3000 },
+        { text: "Training with wooden dummies...", duration: 2500 },
+        { text: "Perfecting your fighting stance...", duration: 3500 },
+        { text: "Working on your reflexes...", duration: 2000 },
+        { text: "Preparing for real combat...", duration: 3000 },
+      ],
     };
 
     return (
@@ -106,6 +113,12 @@ export function MissionAnimation({
         { text: "Sprinting across the desert!", duration: 1800 },
         { text: "Desperately seeking shelter!", duration: 1000 },
       ],
+      training_ground: [
+        { text: "Training intensively!", duration: 1500 },
+        { text: "Practicing combat moves rapidly!", duration: 1200 },
+        { text: "Working on techniques quickly!", duration: 1800 },
+        { text: "Preparing for the final test!", duration: 1000 },
+      ],
     };
 
     return (
@@ -145,6 +158,7 @@ export function MissionAnimation({
       cave_tunnel: "🕳️",
       mountain_path: "⛰️",
       desert_dunes: "🏜️",
+      training_ground: "🥋",
     };
     return icons[environmentType as keyof typeof icons] || "🏰";
   };
