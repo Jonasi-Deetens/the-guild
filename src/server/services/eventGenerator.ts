@@ -56,7 +56,7 @@ export class EventGenerator {
         i,
         eventType,
         difficulty,
-        currentNode?.id
+        null // Main path events should not have parentEventId
       );
 
       timeline.push(node);

@@ -5,6 +5,14 @@ import {
   publicProcedure,
 } from "@/server/context";
 import { statisticsService } from "@/server/services/statisticsService";
+import {
+  getStatPointsPerLevel,
+  validateStatAllocations,
+  calculatePendingLevels,
+  calculateLevelFromExperience,
+  getExperienceForLevel,
+  getMaxLevel,
+} from "@/lib/utils/experience";
 
 export const characterRouter = createTRPCRouter({
   // Get current character
@@ -35,6 +43,130 @@ export const characterRouter = createTRPCRouter({
 
     return character;
   }),
+
+  getCurrentCharacter: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: {
+        id: true,
+        name: true,
+        level: true,
+        currentHealth: true,
+        maxHealth: true,
+        attack: true,
+        defense: true,
+        speed: true,
+        perception: true,
+        experience: true,
+        gold: true,
+      },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    return character;
+  }),
+
+  // Update character health (for real-time combat updates)
+  updateHealth: protectedProcedure
+    .input(
+      z.object({
+        characterId: z.string(),
+        newHealth: z.number().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the character belongs to the current user
+      const character = await ctx.db.character.findFirst({
+        where: {
+          id: input.characterId,
+          userId: ctx.session.user.id,
+        },
+      });
+
+      if (!character) {
+        throw new Error("Character not found or access denied");
+      }
+
+      // Update the character's health
+      const updatedCharacter = await ctx.db.character.update({
+        where: { id: input.characterId },
+        data: { currentHealth: input.newHealth },
+        select: {
+          id: true,
+          name: true,
+          currentHealth: true,
+          maxHealth: true,
+        },
+      });
+
+      return updatedCharacter;
+    }),
+
+  // Rest to restore health
+  rest: protectedProcedure
+    .input(
+      z.object({
+        restType: z.enum(["quick", "full"]),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is already at full health
+      if (character.currentHealth >= character.maxHealth) {
+        throw new Error("Character is already at full health");
+      }
+
+      let healthRestored = 0;
+      let goldCost = 0;
+
+      if (input.restType === "quick") {
+        // Quick rest: restore 50% health instantly, costs 10 gold
+        healthRestored = Math.floor(
+          (character.maxHealth - character.currentHealth) * 0.5
+        );
+        goldCost = 10;
+      } else if (input.restType === "full") {
+        // Full rest: restore 100% health, costs 25 gold
+        healthRestored = character.maxHealth - character.currentHealth;
+        goldCost = 25;
+      }
+
+      // Check if character has enough gold
+      if (character.gold < goldCost) {
+        throw new Error(
+          `Not enough gold. Need ${goldCost} gold for ${input.restType} rest.`
+        );
+      }
+
+      // Apply rest
+      const updatedCharacter = await ctx.db.character.update({
+        where: { userId: ctx.session.user.id },
+        data: {
+          currentHealth: Math.min(
+            character.maxHealth,
+            character.currentHealth + healthRestored
+          ),
+          gold: character.gold - goldCost,
+        },
+      });
+
+      return {
+        healthRestored,
+        goldCost,
+        newHealth: updatedCharacter.currentHealth,
+        newGold: updatedCharacter.gold,
+      };
+    }),
 
   // Create new character
   create: protectedProcedure
@@ -214,12 +346,12 @@ export const characterRouter = createTRPCRouter({
         // Heal the character
         const newHealth = Math.min(
           inventoryItem.character.maxHealth,
-          inventoryItem.character.health + item.healing
+          inventoryItem.character.currentHealth + item.healing
         );
 
         await ctx.db.character.update({
           where: { id: inventoryItem.characterId },
-          data: { health: newHealth },
+          data: { currentHealth: newHealth },
         });
 
         // Remove item from inventory
@@ -320,5 +452,212 @@ export const characterRouter = createTRPCRouter({
 
     const result = await dungeonEngine.giveStartingItems(character.id);
     return result;
+  }),
+
+  // Level up character with stat allocation
+  levelUp: protectedProcedure
+    .input(
+      z.object({
+        statAllocations: z.object({
+          maxHealth: z.number().min(0),
+          attack: z.number().min(0),
+          defense: z.number().min(0),
+          speed: z.number().min(0),
+          perception: z.number().min(0),
+          agility: z.number().min(0),
+          criticalChance: z.number().min(0),
+          blockStrength: z.number().min(0),
+        }),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+        include: {
+          party: true,
+        },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is at max level
+      if (character.level >= getMaxLevel()) {
+        throw new Error("Character is already at max level");
+      }
+
+      // Check if character has pending stat points
+      if (character.pendingStatPoints < getStatPointsPerLevel()) {
+        throw new Error("Not enough stat points to level up");
+      }
+
+      // Check if character is in an active dungeon (prevent leveling during dungeon)
+      const activeDungeon = await ctx.db.dungeonSession.findFirst({
+        where: {
+          party: {
+            members: {
+              some: {
+                characterId: character.id,
+              },
+            },
+          },
+          status: "ACTIVE",
+        },
+      });
+
+      if (activeDungeon) {
+        throw new Error(
+          "Cannot level up during an active dungeon. Return to the hub first."
+        );
+      }
+
+      // Validate stat allocations
+      const validation = validateStatAllocations(input.statAllocations);
+      if (!validation.isValid) {
+        throw new Error(validation.error || "Invalid stat allocations");
+      }
+
+      // Calculate new level
+      const newLevel = character.level + 1;
+
+      // Apply stat increases
+      const updatedCharacter = await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          level: newLevel,
+          pendingStatPoints:
+            character.pendingStatPoints - getStatPointsPerLevel(),
+          maxHealth: { increment: input.statAllocations.maxHealth },
+          health: { increment: input.statAllocations.maxHealth }, // Also heal
+          attack: { increment: input.statAllocations.attack },
+          defense: { increment: input.statAllocations.defense },
+          speed: { increment: input.statAllocations.speed },
+          perception: { increment: input.statAllocations.perception },
+          agility: { increment: input.statAllocations.agility },
+          criticalChance: {
+            increment: input.statAllocations.criticalChance * 0.01,
+          }, // Convert to decimal
+          blockStrength: { increment: input.statAllocations.blockStrength },
+        },
+      });
+
+      return {
+        success: true,
+        character: updatedCharacter,
+        statIncreases: input.statAllocations,
+      };
+    }),
+
+  // Check if character can level up
+  canLevelUp: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: {
+        id: true,
+        level: true,
+        experience: true,
+        pendingStatPoints: true,
+      },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    // Calculate what level the character should be based on their experience
+    const correctLevel = calculateLevelFromExperience(character.experience);
+    const pendingLevels = Math.max(0, correctLevel - character.level);
+    const canLevelUp = pendingLevels > 0 && character.level < getMaxLevel();
+
+    // Calculate what the pending stat points should be
+    const expectedPendingStatPoints = pendingLevels * getStatPointsPerLevel();
+
+    // Calculate XP requirements for next level
+    const nextLevelExp = getExperienceForLevel(character.level + 1);
+    const xpNeeded = nextLevelExp - character.experience;
+
+    console.log("🔍 [canLevelUp] Character state:", {
+      characterId: character.id,
+      currentLevel: character.level,
+      correctLevel,
+      experience: character.experience,
+      nextLevelExp,
+      xpNeeded,
+      pendingLevels,
+      currentPendingStatPoints: character.pendingStatPoints,
+      expectedPendingStatPoints,
+      canLevelUp,
+    });
+
+    // If the character has pending levels but incorrect stat points, fix it
+    if (
+      pendingLevels > 0 &&
+      character.pendingStatPoints !== expectedPendingStatPoints
+    ) {
+      console.log("🔧 Fixing incorrect pending stat points:", {
+        characterId: character.id,
+        pendingLevels,
+        expectedPendingStatPoints,
+        currentPendingStatPoints: character.pendingStatPoints,
+      });
+
+      // Update the character with the correct pending stat points
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          pendingStatPoints: expectedPendingStatPoints,
+        },
+      });
+
+      return {
+        canLevelUp,
+        pendingLevels,
+        pendingStatPoints: expectedPendingStatPoints,
+        isMaxLevel: character.level >= getMaxLevel(),
+      };
+    }
+
+    // Special case: if character has exactly enough XP for next level but no pending levels
+    // This can happen if the character's level in DB is outdated
+    if (
+      pendingLevels === 0 &&
+      character.experience >= nextLevelExp &&
+      character.level < getMaxLevel()
+    ) {
+      console.log(
+        "🔧 Character has enough XP but no pending levels - fixing level:",
+        {
+          characterId: character.id,
+          currentLevel: character.level,
+          experience: character.experience,
+          nextLevelExp,
+          correctLevel,
+        }
+      );
+
+      // Update the character's level to match their experience
+      await ctx.db.character.update({
+        where: { id: character.id },
+        data: {
+          level: correctLevel,
+          pendingStatPoints: 0, // Reset pending stat points since they should have been used
+        },
+      });
+
+      return {
+        canLevelUp: false, // No more levels to gain
+        pendingLevels: 0,
+        pendingStatPoints: 0,
+        isMaxLevel: correctLevel >= getMaxLevel(),
+      };
+    }
+
+    return {
+      canLevelUp,
+      pendingLevels,
+      pendingStatPoints: character.pendingStatPoints,
+      isMaxLevel: character.level >= getMaxLevel(),
+    };
   }),
 });

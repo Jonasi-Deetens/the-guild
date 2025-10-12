@@ -4,7 +4,10 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/context";
-import { dungeonEngine } from "@/server/services/dungeonEngine";
+import { DungeonEngine } from "@/server/services/dungeonEngine";
+import { MissionScheduler } from "@/server/services/missionScheduler";
+
+const dungeonEngine = new DungeonEngine();
 
 export const dungeonRouter = createTRPCRouter({
   // Start a solo dungeon session
@@ -48,126 +51,85 @@ export const dungeonRouter = createTRPCRouter({
         data: {
           missionId: input.missionId,
           status: "WAITING",
-          partyId: null, // No party for solo
+          duration: mission.baseDuration,
         },
       });
-
-      // Start the solo dungeon
-      await dungeonEngine.startSoloDungeon(session.id, character.id);
-
-      return { sessionId: session.id };
-    }),
-
-  // Start a dungeon session
-  startSession: protectedProcedure
-    .input(
-      z.object({
-        missionId: z.string(),
-        partyId: z.string(),
-      })
-    )
-    .mutation(async ({ ctx, input }) => {
-      // Get current character
-      const character = await ctx.db.character.findUnique({
-        where: { userId: ctx.session.user.id },
-      });
-
-      if (!character) {
-        throw new Error("Character not found");
-      }
-
-      // Check if character is in the party
-      const party = await ctx.db.party.findUnique({
-        where: { id: input.partyId },
-        include: { members: true },
-      });
-
-      if (!party) {
-        throw new Error("Party not found");
-      }
-
-      const isInParty = party.members.some(
-        (member) => member.characterId === character.id
-      );
-
-      if (!isInParty) {
-        throw new Error("Character is not in this party");
-      }
-
-      // Check if all party members are ready
-      const readyMembers = party.members.filter((member) => member.isReady);
-      if (readyMembers.length !== party.members.length) {
-        throw new Error("Not all party members are ready");
-      }
-
-      // Create dungeon session
-      const session = await ctx.db.dungeonSession.create({
-        data: {
-          missionId: input.missionId,
-          partyId: input.partyId,
-          status: "WAITING",
-        },
-        include: {
-          mission: true,
-          party: {
-            include: {
-              members: {
-                include: {
-                  character: true,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      // Start the dungeon
-      await dungeonEngine.startDungeon(session.id);
 
       return session;
     }),
 
-  // Submit action for current turn
-  submitAction: protectedProcedure
+  // Start a party dungeon session
+  startPartySession: protectedProcedure
     .input(
       z.object({
-        sessionId: z.string(),
-        action: z.enum([
-          "ATTACK",
-          "DEFEND",
-          "USE_ITEM",
-          "FLEE",
-          "BETRAY",
-          "WAIT",
-        ]),
-        targetId: z.string().optional(),
-        itemId: z.string().optional(),
+        missionId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
       // Get current character
       const character = await ctx.db.character.findUnique({
         where: { userId: ctx.session.user.id },
+        include: { party: true },
       });
 
       if (!character) {
         throw new Error("Character not found");
       }
 
-      // Submit action to dungeon engine
-      await dungeonEngine.submitAction(input.sessionId, character.id, {
-        characterId: character.id,
-        action: input.action,
-        targetId: input.targetId,
-        itemId: input.itemId,
+      if (!character.partyId) {
+        throw new Error("Character is not in a party");
+      }
+
+      // Get mission details
+      const mission = await ctx.db.mission.findUnique({
+        where: { id: input.missionId },
       });
 
-      return { success: true };
+      if (!mission) {
+        throw new Error("Mission not found");
+      }
+
+      // Check if all party members are ready
+      const partyMembers = await ctx.db.partyMember.findMany({
+        where: { partyId: character.partyId },
+        include: { character: true },
+      });
+
+      const notReadyMembers = partyMembers.filter((member) => !member.isReady);
+      if (notReadyMembers.length > 0) {
+        throw new Error("Not all party members are ready");
+      }
+
+      // Check if party size meets mission requirements
+      if (
+        partyMembers.length < mission.minPlayers ||
+        partyMembers.length > mission.maxPlayers
+      ) {
+        throw new Error(
+          `Party size must be between ${mission.minPlayers} and ${mission.maxPlayers}`
+        );
+      }
+
+      // Create a party dungeon session
+      const session = await ctx.db.dungeonSession.create({
+        data: {
+          missionId: input.missionId,
+          partyId: character.partyId,
+          status: "WAITING",
+          duration: mission.baseDuration,
+        },
+      });
+
+      return session;
     }),
 
-  // Get dungeon session details
-  getSession: publicProcedure
-    .input(z.object({ sessionId: z.string() }))
+  // Get session details
+  getSession: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+      })
+    )
     .query(async ({ ctx, input }) => {
       const session = await ctx.db.dungeonSession.findUnique({
         where: { id: input.sessionId },
@@ -182,52 +144,202 @@ export const dungeonRouter = createTRPCRouter({
               },
             },
           },
-          turns: {
-            include: {
-              character: true,
-            },
-            orderBy: { submittedAt: "desc" },
-          },
-          loot: {
-            include: {
-              item: true,
-            },
-          },
           events: {
             include: {
+              template: true,
               playerActions: {
                 include: {
                   character: true,
                 },
               },
             },
+            orderBy: {
+              eventNumber: "asc",
+            },
           },
         },
       });
 
-      // For solo missions, we need to get the character data from the events
-      if (session && !session.party && session.events.length > 0) {
-        const characterActions = session.events
-          .flatMap((event) => event.playerActions)
-          .map((action) => action.character);
-
-        // Create a mock party structure for solo missions
-        const soloCharacter = characterActions[0];
-        if (soloCharacter) {
-          (session as any).party = {
-            members: [
-              {
-                character: soloCharacter,
-              },
-            ],
-          };
-        }
+      if (!session) {
+        throw new Error("Session not found");
       }
 
-      return session;
+      // Check if user has access to this session
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check access: either solo session or party member
+      if (session.partyId) {
+        const isPartyMember = await ctx.db.partyMember.findFirst({
+          where: {
+            partyId: session.partyId,
+            characterId: character.id,
+          },
+        });
+
+        if (!isPartyMember) {
+          throw new Error("Access denied");
+        }
+      } else {
+        // Solo session - check if character is the one in the session
+        // This would need to be tracked differently in a real implementation
+        // For now, we'll allow access
+      }
+
+      // Find the current active event
+      const currentEvent = session.events.find(
+        (event) =>
+          event.id === session.currentEventId && event.status === "ACTIVE"
+      );
+
+      return {
+        ...session,
+        currentEvent: currentEvent || null,
+      };
     }),
 
-  // Get active sessions for a character
+  // Start mission
+  startMission: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Check if character is dead
+      if (character.currentHealth <= 0) {
+        throw new Error("Character is dead and cannot start a mission");
+      }
+
+      // Use the dungeon engine to start the mission
+      await dungeonEngine.startMission(input.sessionId);
+
+      return { success: true };
+    }),
+
+  // Submit action for current event
+  submitAction: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        action: z.string(),
+        actionData: z.any().optional(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Submit the action using the dungeon engine
+      const result = await dungeonEngine.submitEventAction(
+        input.sessionId,
+        character.id,
+        input.action,
+        input.actionData
+      );
+
+      return result;
+    }),
+
+  // Get mission status
+  getMissionStatus: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      return await dungeonEngine.getMissionStatus(input.sessionId);
+    }),
+
+  // Get current event
+  getCurrentEvent: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      return await dungeonEngine.getCurrentEvent(input.sessionId);
+    }),
+
+  // Get available missions
+  getAvailableMissions: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    const missions = await ctx.db.mission.findMany({
+      where: {
+        isActive: true,
+        minLevel: { lte: character.level },
+      },
+      orderBy: {
+        difficulty: "asc",
+      },
+    });
+
+    return missions;
+  }),
+
+  // Get mission details
+  getMission: protectedProcedure
+    .input(
+      z.object({
+        missionId: z.string(),
+      })
+    )
+    .query(async ({ ctx, input }) => {
+      const mission = await ctx.db.mission.findUnique({
+        where: { id: input.missionId },
+      });
+
+      if (!mission) {
+        throw new Error("Mission not found");
+      }
+
+      return mission;
+    }),
+
+  // Get active sessions for character
   getActiveSessions: protectedProcedure.query(async ({ ctx }) => {
     const character = await ctx.db.character.findUnique({
       where: { userId: ctx.session.user.id },
@@ -237,16 +349,27 @@ export const dungeonRouter = createTRPCRouter({
       throw new Error("Character not found");
     }
 
-    return await ctx.db.dungeonSession.findMany({
+    // Get sessions where character is involved
+    const sessions = await ctx.db.dungeonSession.findMany({
       where: {
-        status: "ACTIVE",
-        party: {
-          members: {
-            some: {
-              characterId: character.id,
-            },
+        OR: [
+          // Solo sessions (this would need better tracking in a real implementation)
+          {
+            partyId: null,
+            status: { in: ["WAITING", "ACTIVE"] },
           },
-        },
+          // Party sessions
+          {
+            party: {
+              members: {
+                some: {
+                  characterId: character.id,
+                },
+              },
+            },
+            status: { in: ["WAITING", "ACTIVE"] },
+          },
+        ],
       },
       include: {
         mission: true,
@@ -260,63 +383,19 @@ export const dungeonRouter = createTRPCRouter({
           },
         },
       },
+      orderBy: {
+        createdAt: "desc",
+      },
     });
+
+    return sessions;
   }),
 
-  // Get completed sessions for a character
-  getCompletedSessions: protectedProcedure
-    .input(
-      z.object({
-        limit: z.number().min(1).max(50).default(10),
-        offset: z.number().min(0).default(0),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      const character = await ctx.db.character.findUnique({
-        where: { userId: ctx.session.user.id },
-      });
-
-      if (!character) {
-        throw new Error("Character not found");
-      }
-
-      return await ctx.db.dungeonSession.findMany({
-        where: {
-          status: {
-            in: ["COMPLETED", "FAILED"],
-          },
-          party: {
-            members: {
-              some: {
-                characterId: character.id,
-              },
-            },
-          },
-        },
-        include: {
-          mission: true,
-          party: {
-            include: {
-              members: {
-                include: {
-                  character: true,
-                },
-              },
-            },
-          },
-        },
-        orderBy: { completedAt: "desc" },
-        take: input.limit,
-        skip: input.offset,
-      });
-    }),
-
-  // Claim loot from dungeon
-  claimLoot: protectedProcedure
+  // Abandon mission
+  abandonMission: protectedProcedure
     .input(
       z.object({
         sessionId: z.string(),
-        lootId: z.string(),
       })
     )
     .mutation(async ({ ctx, input }) => {
@@ -328,119 +407,15 @@ export const dungeonRouter = createTRPCRouter({
         throw new Error("Character not found");
       }
 
-      // Check if character is in the party
-      const session = await ctx.db.dungeonSession.findUnique({
+      // Update session status to abandoned
+      const session = await ctx.db.dungeonSession.update({
         where: { id: input.sessionId },
-        include: {
-          party: {
-            include: {
-              members: true,
-            },
-          },
-        },
-      });
-
-      if (!session) {
-        throw new Error("Dungeon session not found");
-      }
-
-      const isInParty = session.party.members.some(
-        (member) => member.characterId === character.id
-      );
-
-      if (!isInParty) {
-        throw new Error("Character is not in this party");
-      }
-
-      // Check if loot is already claimed
-      const loot = await ctx.db.dungeonLoot.findUnique({
-        where: { id: input.lootId },
-      });
-
-      if (!loot) {
-        throw new Error("Loot not found");
-      }
-
-      if (loot.claimedBy) {
-        throw new Error("Loot already claimed");
-      }
-
-      // Claim the loot
-      await ctx.db.dungeonLoot.update({
-        where: { id: input.lootId },
         data: {
-          claimedBy: character.id,
-          claimedAt: new Date(),
-        },
-      });
-
-      // Add item to character's inventory
-      await ctx.db.inventory.create({
-        data: {
-          characterId: character.id,
-          itemId: loot.itemId,
-          quantity: loot.quantity,
+          status: "ABANDONED",
+          completedAt: new Date(),
         },
       });
 
       return { success: true };
     }),
-
-  // Get dungeon statistics
-  getStats: protectedProcedure.query(async ({ ctx }) => {
-    const character = await ctx.db.character.findUnique({
-      where: { userId: ctx.session.user.id },
-    });
-
-    if (!character) {
-      throw new Error("Character not found");
-    }
-
-    const [totalSessions, completedSessions, failedSessions] =
-      await Promise.all([
-        ctx.db.dungeonSession.count({
-          where: {
-            party: {
-              members: {
-                some: {
-                  characterId: character.id,
-                },
-              },
-            },
-          },
-        }),
-        ctx.db.dungeonSession.count({
-          where: {
-            status: "COMPLETED",
-            party: {
-              members: {
-                some: {
-                  characterId: character.id,
-                },
-              },
-            },
-          },
-        }),
-        ctx.db.dungeonSession.count({
-          where: {
-            status: "FAILED",
-            party: {
-              members: {
-                some: {
-                  characterId: character.id,
-                },
-              },
-            },
-          },
-        }),
-      ]);
-
-    return {
-      totalSessions,
-      completedSessions,
-      failedSessions,
-      successRate:
-        totalSessions > 0 ? (completedSessions / totalSessions) * 100 : 0,
-    };
-  }),
 });

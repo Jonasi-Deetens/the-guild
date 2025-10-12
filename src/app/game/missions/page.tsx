@@ -61,7 +61,7 @@ export default function MissionsPage() {
     api.character.getCurrent.useQuery();
   const { data: myCurrentParty, refetch: refetchParty } =
     api.party.getMyCurrent.useQuery();
-  const startSessionMutation = api.dungeon.startSession.useMutation();
+  const startPartySessionMutation = api.dungeon.startPartySession.useMutation();
   const startSoloSessionMutation = api.dungeon.startSoloSession.useMutation();
   const leavePartyMutation = api.party.leave.useMutation();
   const cleanupPartyMutation = api.party.cleanup.useMutation();
@@ -158,7 +158,7 @@ export default function MissionsPage() {
         });
 
         // Success! Redirect to dungeon
-        router.push(`/game/dungeon/${session.sessionId}`);
+        router.push(`/game/dungeon/${session.id}`);
       } catch (error) {
         console.error("Failed to start solo mission:", error);
         setStartError(
@@ -208,9 +208,8 @@ export default function MissionsPage() {
       }
 
       try {
-        const session = await startSessionMutation.mutateAsync({
+        const session = await startPartySessionMutation.mutateAsync({
           missionId: selectedMission.id,
-          partyId: myCurrentParty.id,
         });
 
         // Success! Redirect to dungeon
@@ -682,12 +681,12 @@ export default function MissionsPage() {
                   (selectedMission.minPlayers > 1 && !myCurrentParty) ||
                   (selectedMission.minPlayers > 1 &&
                     myCurrentParty.leaderId !== character?.id) ||
-                  startSessionMutation.isPending ||
+                  startPartySessionMutation.isPending ||
                   startSoloSessionMutation.isPending
                 }
                 className="flex-1"
               >
-                {startSessionMutation.isPending ||
+                {startPartySessionMutation.isPending ||
                 startSoloSessionMutation.isPending ? (
                   <>
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>

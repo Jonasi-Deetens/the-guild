@@ -3,7 +3,16 @@
 import { useEffect, useState } from "react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
-import { Star, Heart, Sword, Shield, Zap, Eye } from "@/components/icons";
+import {
+  Star,
+  Heart,
+  Sword,
+  Shield,
+  Zap,
+  Eye,
+  Crown,
+} from "@/components/icons";
+import { ParticleEffect } from "./ParticleEffect";
 
 interface LevelUpNotificationProps {
   notification: {
@@ -43,92 +52,81 @@ export function LevelUpNotification({
 
   return (
     <Modal isOpen={true} onClose={onClose} title="">
-      <div className="p-8 text-center">
-        {/* Level Up Animation */}
-        <div
-          className={`mb-6 transition-all duration-1000 ${
-            showAnimation ? "scale-100 opacity-100" : "scale-50 opacity-0"
-          }`}
-        >
-          <div className="text-8xl mb-4">🎉</div>
-          <h2 className="text-4xl font-bold text-yellow-400 mb-2">LEVEL UP!</h2>
-          <div className="text-6xl font-bold text-white mb-4">
-            Level {newLevel}
+      <div className="p-8 text-center relative">
+        <ParticleEffect
+          isActive={showAnimation}
+          type="celebration"
+          duration={5000}
+          particleCount={60}
+          className="z-10"
+        />
+        <div className="relative z-20">
+          {/* Level Up Available Animation */}
+          <div
+            className={`mb-6 transition-all duration-1000 ${
+              showAnimation ? "scale-100 opacity-100" : "scale-50 opacity-0"
+            }`}
+          >
+            <div className="text-8xl mb-4">⭐</div>
+            <h2 className="text-4xl font-bold text-yellow-400 mb-2">
+              LEVEL UP AVAILABLE!
+            </h2>
+            <div className="text-2xl font-bold text-white mb-4">
+              You can now level up to Level {newLevel}
+            </div>
           </div>
         </div>
 
-        {/* Stat Increases */}
+        {/* Level Up Info */}
         <div className="bg-gray-800/50 rounded-lg p-6 mb-6">
           <h3 className="text-xl font-semibold text-white mb-4">
-            Stat Increases
+            Ready to Level Up
           </h3>
-          <div className="grid grid-cols-2 gap-4 text-left">
-            {statIncreases.maxHealth.increment > 0 && (
-              <div className="flex items-center space-x-3">
-                <Heart className="h-5 w-5 text-red-400" />
-                <span className="text-gray-300">Max Health:</span>
-                <span className="text-green-400 font-semibold">
-                  +{statIncreases.maxHealth.increment}
-                </span>
-              </div>
-            )}
-            {statIncreases.attack.increment > 0 && (
-              <div className="flex items-center space-x-3">
-                <Sword className="h-5 w-5 text-orange-400" />
-                <span className="text-gray-300">Attack:</span>
-                <span className="text-green-400 font-semibold">
-                  +{statIncreases.attack.increment}
-                </span>
-              </div>
-            )}
-            {statIncreases.defense.increment > 0 && (
-              <div className="flex items-center space-x-3">
-                <Shield className="h-5 w-5 text-blue-400" />
-                <span className="text-gray-300">Defense:</span>
-                <span className="text-green-400 font-semibold">
-                  +{statIncreases.defense.increment}
-                </span>
-              </div>
-            )}
-            {statIncreases.speed.increment > 0 && (
-              <div className="flex items-center space-x-3">
-                <Zap className="h-5 w-5 text-yellow-400" />
-                <span className="text-gray-300">Speed:</span>
-                <span className="text-green-400 font-semibold">
-                  +{statIncreases.speed.increment}
-                </span>
-              </div>
-            )}
-            {statIncreases.perception.increment > 0 && (
-              <div className="flex items-center space-x-3">
-                <Eye className="h-5 w-5 text-purple-400" />
-                <span className="text-gray-300">Perception:</span>
-                <span className="text-green-400 font-semibold">
-                  +{statIncreases.perception.increment}
-                </span>
-              </div>
-            )}
+          <div className="space-y-3">
+            <div className="flex items-center justify-center space-x-2">
+              <Crown className="h-5 w-5 text-yellow-400" />
+              <span className="text-gray-300">New Level:</span>
+              <span className="text-yellow-400 font-semibold">{newLevel}</span>
+            </div>
+            <div className="flex items-center justify-center space-x-2">
+              <Star className="h-5 w-5 text-yellow-400" />
+              <span className="text-gray-300">Total Experience:</span>
+              <span className="text-yellow-400 font-semibold">
+                {totalExperience.toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
 
-        {/* Experience Info */}
-        <div className="bg-gray-800/30 rounded-lg p-4 mb-6">
-          <div className="flex items-center justify-center space-x-2">
-            <Star className="h-5 w-5 text-yellow-400" />
-            <span className="text-gray-300">Total Experience:</span>
-            <span className="text-yellow-400 font-semibold">
-              {totalExperience}
-            </span>
+        {/* Instructions */}
+        <div className="bg-blue-900/30 border border-blue-500/50 rounded-lg p-4 mb-6">
+          <div className="flex items-center justify-center space-x-2 mb-2">
+            <Star className="h-5 w-5 text-blue-400" />
+            <span className="text-blue-400 font-semibold">How to Level Up</span>
           </div>
+          <p className="text-gray-300 text-sm">
+            Return to the hub to allocate your stat points and complete your
+            level up. You'll be able to choose how to distribute your stat
+            increases!
+          </p>
         </div>
 
-        {/* Close Button */}
-        <Button
-          onClick={onClose}
-          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white font-semibold px-8 py-3"
-        >
-          Continue Adventure
-        </Button>
+        {/* Action Buttons */}
+        <div className="flex space-x-3">
+          <Button variant="outline" onClick={onClose} className="flex-1">
+            Continue Adventure
+          </Button>
+          <Button
+            onClick={() => {
+              onClose();
+              // Navigate to hub - this would need to be passed as a prop or use router
+              window.location.href = "/game/hub";
+            }}
+            className="flex-1 bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700"
+          >
+            Go to Hub
+          </Button>
+        </div>
       </div>
     </Modal>
   );

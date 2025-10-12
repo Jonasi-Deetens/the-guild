@@ -5,6 +5,7 @@ import { ClosingWallsGame } from "./ClosingWallsGame";
 import { LockPickingGame } from "./LockPickingGame";
 import { RiddleGame } from "./RiddleGame";
 import { QuickTimeGame } from "./QuickTimeGame";
+import { CombatClickerGame } from "./CombatClickerGame";
 
 export type MinigameType =
   | "JUMPING_GAPS"
@@ -12,6 +13,7 @@ export type MinigameType =
   | "LOCK_PICKING"
   | "RIDDLE"
   | "QUICK_TIME"
+  | "COMBAT_CLICKER"
   | "NONE";
 
 interface MinigameContainerProps {
@@ -24,6 +26,16 @@ interface MinigameContainerProps {
     attack: number;
     defense: number;
   };
+  partyMembers?: Array<{
+    id: string;
+    name: string;
+    currentHealth: number;
+    maxHealth: number;
+    attack: number;
+    defense: number;
+    agility?: number;
+    blockStrength?: number;
+  }>;
 }
 
 export function MinigameContainer({
@@ -31,6 +43,7 @@ export function MinigameContainer({
   config,
   onComplete,
   playerStats,
+  partyMembers = [],
 }: MinigameContainerProps) {
   switch (type) {
     case "JUMPING_GAPS":
@@ -73,11 +86,51 @@ export function MinigameContainer({
           onComplete={onComplete}
         />
       );
+    case "COMBAT_CLICKER":
+      return (
+        <CombatClickerGame
+          config={config}
+          playerStats={playerStats}
+          partyMembers={partyMembers}
+          onComplete={onComplete}
+        />
+      );
     default:
       return (
         <div className="p-8 text-center">
           <p className="text-gray-400">No minigame required for this event.</p>
         </div>
       );
+  }
+}
+
+// Helper function to map event types to minigame types
+export function getMinigameTypeForEvent(event: {
+  type: string;
+  template?: { minigameType?: string };
+}): MinigameType {
+  // First check if the template has a specific minigame type
+  if (event.template?.minigameType) {
+    return event.template.minigameType as MinigameType;
+  }
+
+  // Fallback to default mapping based on event type
+  switch (event.type) {
+    case "COMBAT":
+    case "BOSS":
+      return "COMBAT_CLICKER";
+    case "TRAP":
+      return "QUICK_TIME";
+    case "PUZZLE":
+      return "RIDDLE";
+    case "TREASURE":
+      return "LOCK_PICKING";
+    case "ENVIRONMENTAL_HAZARD":
+      return "CLOSING_WALLS";
+    case "CHOICE":
+    case "NPC_ENCOUNTER":
+    case "REST":
+    default:
+      return "NONE";
   }
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
@@ -21,8 +22,10 @@ import {
 } from "@/components/icons";
 import { api } from "@/trpc/react";
 import { LevelUpNotification } from "@/components/game/LevelUpNotification";
+import { LevelUpPanel } from "@/components/game/LevelUpPanel";
 import { Inventory } from "@/components/game/Inventory";
 import { StatisticsPanel } from "@/components/game/StatisticsPanel";
+import { getExperienceInfo } from "@/lib/utils/experience";
 import { useWebSocketStore } from "@/stores/websocket";
 
 interface GameLayoutProps {
@@ -30,36 +33,22 @@ interface GameLayoutProps {
 }
 
 export default function GameLayout({ children }: GameLayoutProps) {
+  const pathname = usePathname();
+  const isDungeonPage = pathname?.includes("/game/dungeon/");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statisticsOpen, setStatisticsOpen] = useState(false);
+  const [showLevelUpPanel, setShowLevelUpPanel] = useState(false);
 
   // Fetch real character data
+  const utils = api.useUtils();
   const { data: character, isLoading: characterLoading } =
     api.character.getCurrent.useQuery();
+  const { data: canLevelUpData } = api.character.canLevelUp.useQuery();
 
-  // Calculate experience info from character data
+  // Calculate experience info from character data using shared utility
   const experienceInfo = character
-    ? (() => {
-        const currentLevel = character.level;
-        const currentExp = character.experience;
-
-        // Calculate experience required for current level
-        const currentLevelExp = Math.pow(currentLevel - 1, 2) * 100;
-        const nextLevelExp = Math.pow(currentLevel, 2) * 100;
-        const expToNext = nextLevelExp - currentExp;
-        const expProgress = currentExp - currentLevelExp;
-        const expNeeded = nextLevelExp - currentLevelExp;
-
-        return {
-          currentLevel,
-          currentExperience: currentExp,
-          experienceToNext: expToNext,
-          experienceProgress: expProgress,
-          experienceNeeded: expNeeded,
-          progressPercentage: Math.round((expProgress / expNeeded) * 100),
-        };
-      })()
+    ? getExperienceInfo(character.level, character.experience)
     : null;
 
   // Debug logging for character data
@@ -81,6 +70,12 @@ export default function GameLayout({ children }: GameLayoutProps) {
     }
   }, [experienceInfo]);
 
+  useEffect(() => {
+    if (canLevelUpData) {
+      console.log("🎮 [Layout] Can level up data:", canLevelUpData);
+    }
+  }, [canLevelUpData]);
+
   // WebSocket store for level-up and experience notifications
   const {
     levelUpNotification,
@@ -88,9 +83,6 @@ export default function GameLayout({ children }: GameLayoutProps) {
     experienceUpdateNotification,
     setExperienceUpdateNotification,
   } = useWebSocketStore();
-
-  // tRPC utils for query invalidation
-  const utils = api.useUtils();
 
   // Handle level-up and experience update notifications and invalidate character queries
   useEffect(() => {
@@ -103,6 +95,36 @@ export default function GameLayout({ children }: GameLayoutProps) {
       utils.character.getCurrent.invalidate();
     }
   }, [levelUpNotification, experienceUpdateNotification, utils]);
+
+  // If we're in a dungeon page, render children directly without the game layout
+  if (isDungeonPage) {
+    return (
+      <>
+        {children}
+        {/* Still show level up notifications and modals */}
+        <LevelUpNotification
+          notification={levelUpNotification}
+          onClose={() => setLevelUpNotification(null)}
+        />
+        <Inventory
+          isOpen={inventoryOpen}
+          onClose={() => setInventoryOpen(false)}
+        />
+        <StatisticsPanel
+          isOpen={statisticsOpen}
+          onClose={() => setStatisticsOpen(false)}
+        />
+        <LevelUpPanel
+          isOpen={showLevelUpPanel}
+          onClose={async () => {
+            setShowLevelUpPanel(false);
+            await utils.character.getCurrent.invalidate();
+            await utils.character.canLevelUp.invalidate();
+          }}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
@@ -153,7 +175,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
                       <span className="text-sm text-stone-300">Health</span>
                       <span className="text-sm font-semibold text-red-400 flex items-center">
                         <Heart className="h-4 w-4 mr-1" />
-                        {character.health}/{character.maxHealth}
+                        {character.currentHealth}/{character.maxHealth}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -181,18 +203,58 @@ export default function GameLayout({ children }: GameLayoutProps) {
                             {experienceInfo.experienceNeeded}
                           </span>
                         </div>
-                        <div className="w-full bg-stone-700 rounded-full h-2">
+                        <div className="w-full bg-stone-700 rounded-full h-2 relative">
                           <div
-                            className="bg-gradient-to-r from-yellow-500 to-yellow-400 h-2 rounded-full transition-all duration-300"
+                            className={`h-2 rounded-full transition-all duration-300 ${
+                              experienceInfo.canLevelUp
+                                ? "bg-gradient-to-r from-green-500 to-green-400 animate-pulse"
+                                : "bg-gradient-to-r from-yellow-500 to-yellow-400"
+                            }`}
                             style={{
-                              width: `${experienceInfo.progressPercentage}%`,
+                              width: `${Math.min(
+                                experienceInfo.progressPercentage,
+                                100
+                              )}%`,
                             }}
                           />
+                          {experienceInfo.canLevelUp && (
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-green-400 rounded-full flex items-center justify-center">
+                              <span className="text-xs text-black font-bold">
+                                !
+                              </span>
+                            </div>
+                          )}
                         </div>
                         <div className="text-xs text-stone-400 text-center">
-                          {experienceInfo.experienceToNext} XP to Level{" "}
-                          {experienceInfo.currentLevel + 1}
+                          {experienceInfo.canLevelUp ? (
+                            <span className="text-green-400 font-semibold">
+                              Ready to Level Up!
+                            </span>
+                          ) : experienceInfo.isMaxLevel ? (
+                            <span className="text-purple-400 font-semibold">
+                              Max Level Reached
+                            </span>
+                          ) : (
+                            `${experienceInfo.experienceToNext} XP to Level ${
+                              experienceInfo.currentLevel + 1
+                            }`
+                          )}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Level Up Button */}
+                    {(canLevelUpData?.canLevelUp ||
+                      experienceInfo?.canLevelUp) && (
+                      <div className="mt-3">
+                        <Button
+                          className="w-full bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white font-semibold"
+                          onClick={() => setShowLevelUpPanel(true)}
+                        >
+                          <Star className="h-4 w-4 mr-2" />
+                          Level Up! ({canLevelUpData?.pendingLevels || 1} level
+                          {(canLevelUpData?.pendingLevels || 1) > 1 ? "s" : ""})
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -333,6 +395,17 @@ export default function GameLayout({ children }: GameLayoutProps) {
       <StatisticsPanel
         isOpen={statisticsOpen}
         onClose={() => setStatisticsOpen(false)}
+      />
+
+      {/* Level Up Panel */}
+      <LevelUpPanel
+        isOpen={showLevelUpPanel}
+        onClose={async () => {
+          setShowLevelUpPanel(false);
+          // Refresh character data when panel closes
+          await utils.character.getCurrent.invalidate();
+          await utils.character.canLevelUp.invalidate();
+        }}
       />
     </div>
   );

@@ -33,14 +33,22 @@ interface WebSocketState {
   currentSession: {
     sessionId: string;
     missionName: string;
-    turnNumber: number;
-    timeLimit: number;
-    endsAt: string;
+    status: string;
+    remainingTime: number;
+    totalDuration: number;
+    isPaused: boolean;
+    currentEventId: string | null;
   } | null;
   levelUpNotification: {
     newLevel: number;
     statIncreases: any;
     totalExperience: number;
+  } | null;
+  levelUpAvailableNotification: {
+    pendingLevels: number;
+    currentExperience: number;
+    requiredExperience: number;
+    pendingStatPoints: number;
   } | null;
   experienceUpdateNotification: {
     newExperience: number;
@@ -83,6 +91,7 @@ interface WebSocketActions {
     gold: number;
   }) => void;
   attemptTheft: (targetId: string) => void;
+  sendMessage: (message: any) => void;
   addActivity: (activity: {
     id: string;
     message: string;
@@ -106,15 +115,42 @@ interface WebSocketActions {
   updateSession: (session: {
     sessionId: string;
     missionName: string;
-    turnNumber: number;
-    timeLimit: number;
-    endsAt: string;
+    status: string;
+    remainingTime: number;
+    totalDuration: number;
+    isPaused: boolean;
+    currentEventId: string | null;
   }) => void;
+  updateMissionTimer: (data: {
+    sessionId: string;
+    remainingTime: number;
+    isPaused: boolean;
+  }) => void;
+  onEventSpawned: (data: {
+    sessionId: string;
+    eventId: string;
+    eventType: string;
+  }) => void;
+  onEventCompleted: (data: {
+    sessionId: string;
+    eventId: string;
+    results: any;
+  }) => void;
+  onMissionCompleted: (data: { sessionId: string; rewards: any }) => void;
+  onMissionFailed: (data: { sessionId: string; reason: string }) => void;
   setLevelUpNotification: (
     notification: {
       newLevel: number;
       statIncreases: any;
       totalExperience: number;
+    } | null
+  ) => void;
+  setLevelUpAvailableNotification: (
+    notification: {
+      pendingLevels: number;
+      currentExperience: number;
+      requiredExperience: number;
+      pendingStatPoints: number;
     } | null
   ) => void;
   setExperienceUpdateNotification: (
@@ -136,6 +172,7 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     recentActivity: [],
     currentSession: null,
     levelUpNotification: null,
+    levelUpAvailableNotification: null,
     experienceUpdateNotification: null,
     lastEvent: null,
 
@@ -190,32 +227,38 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
         // Handle dungeon start
       });
 
-      socket.on("turnStarted", (data) => {
+      socket.on("missionStarted", (data) => {
         get().updateSession(data);
       });
 
-      socket.on("turnEnded", (data) => {
-        console.log("Turn ended:", data);
-        // Handle turn end
+      socket.on("missionTimerUpdate", (data) => {
+        get().updateMissionTimer(data);
+      });
+
+      socket.on("eventSpawned", (data) => {
+        get().onEventSpawned(data);
       });
 
       socket.on("eventCompleted", (data) => {
-        console.log("Event completed:", data);
-        // Store the last event for components to subscribe to
-        set({ lastEvent: { type: "eventCompleted", ...data } });
+        get().onEventCompleted(data);
       });
 
-      socket.on("dungeonCompleted", (data) => {
-        console.log("Dungeon completed:", data);
-        set({
-          currentSession: null,
-          lastEvent: { type: "dungeonCompleted", ...data },
-        });
+      socket.on("missionCompleted", (data) => {
+        get().onMissionCompleted(data);
+      });
+
+      socket.on("missionFailed", (data) => {
+        get().onMissionFailed(data);
       });
 
       socket.on("characterLeveledUp", (data) => {
         console.log("Character leveled up:", data);
         set({ levelUpNotification: data });
+      });
+
+      socket.on("characterLevelUpAvailable", (data) => {
+        console.log("Character level up available:", data);
+        set({ levelUpAvailableNotification: data });
       });
 
       socket.on("characterExperienceUpdated", (data) => {
@@ -331,6 +374,13 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
       }
     },
 
+    sendMessage: (message: any) => {
+      const { socket } = get();
+      if (socket) {
+        socket.emit("message", message);
+      }
+    },
+
     addActivity: (activity) => {
       set((state) => ({
         recentActivity: [activity, ...state.recentActivity].slice(0, 50), // Keep last 50 activities
@@ -354,8 +404,49 @@ export const useWebSocketStore = create<WebSocketState & WebSocketActions>(
     updateSession: (session) => {
       set({ currentSession: session });
     },
+
+    updateMissionTimer: (data) => {
+      set((state) => ({
+        currentSession: state.currentSession
+          ? {
+              ...state.currentSession,
+              remainingTime: data.remainingTime,
+              isPaused: data.isPaused,
+            }
+          : null,
+      }));
+    },
+
+    onEventSpawned: (data) => {
+      set({
+        lastEvent: { type: "eventSpawned", ...data },
+      });
+    },
+
+    onEventCompleted: (data) => {
+      set({
+        lastEvent: { type: "eventCompleted", ...data },
+      });
+    },
+
+    onMissionCompleted: (data) => {
+      set({
+        currentSession: null,
+        lastEvent: { type: "missionCompleted", ...data },
+      });
+    },
+
+    onMissionFailed: (data) => {
+      set({
+        currentSession: null,
+        lastEvent: { type: "missionFailed", ...data },
+      });
+    },
     setLevelUpNotification: (notification) => {
       set({ levelUpNotification: notification });
+    },
+    setLevelUpAvailableNotification: (notification) => {
+      set({ levelUpAvailableNotification: notification });
     },
     setExperienceUpdateNotification: (notification) => {
       set({ experienceUpdateNotification: notification });

@@ -226,7 +226,7 @@ export default function ProfilePage() {
                   <span className="text-gray-400">Health:</span>
                   <span className="text-red-400 flex items-center">
                     <Heart className="h-4 w-4 mr-1" />
-                    {character.health}/{character.maxHealth}
+                    {character.currentHealth}/{character.maxHealth}
                   </span>
                 </div>
               </div>

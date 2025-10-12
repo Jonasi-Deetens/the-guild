@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MinigameContainer, getMinigameTypeForEvent } from "./minigames";
 
 interface EventCardProps {
   event: {
@@ -32,6 +33,14 @@ interface EventCardProps {
     defense: number;
   };
   hasSubmitted: boolean;
+  partyMembers?: Array<{
+    id: string;
+    name: string;
+    currentHealth: number;
+    maxHealth: number;
+    attack: number;
+    defense: number;
+  }>;
 }
 
 export function EventCard({
@@ -39,8 +48,11 @@ export function EventCard({
   onActionSubmit,
   playerStats,
   hasSubmitted,
+  partyMembers = [],
 }: EventCardProps) {
   const [selectedAction, setSelectedAction] = useState<string>("");
+  const [showMinigame, setShowMinigame] = useState<boolean>(false);
+  const [minigameResult, setMinigameResult] = useState<any>(null);
 
   const getEventTypeColor = (type: string) => {
     switch (type) {
@@ -511,14 +523,66 @@ export function EventCard({
         ...(selectedAction === "ATTACK" && { target: "enemy" }),
         ...(selectedAction === "USE_ITEM" && { itemId: "health_potion" }),
         ...(selectedAction === "FLEE" && { direction: "back" }),
+        ...(minigameResult && { minigameResult }),
       };
 
       onActionSubmit(selectedAction, actionData);
     }
   };
 
+  const handleMinigameComplete = (result: any) => {
+    setMinigameResult(result);
+    setShowMinigame(false);
+    // Auto-submit the action with minigame result
+    const actionData = {
+      actionType: "MINIGAME_COMPLETE",
+      timestamp: new Date().toISOString(),
+      minigameResult: result,
+    };
+    onActionSubmit("MINIGAME_COMPLETE", actionData);
+  };
+
+  const handleStartMinigame = () => {
+    setShowMinigame(true);
+  };
+
+  const getMinigameConfig = (event: any, minigameType: string) => {
+    if (minigameType === "COMBAT_CLICKER") {
+      // Use template config if available, otherwise use defaults
+      const template = event.template || {};
+      const config = template.config || {};
+
+      // For the new monster template system, we need to pass the template IDs and generation parameters
+      const combatConfig = {
+        monsterTemplateIds: config.monsterTemplateIds || [],
+        minMonsters: config.minMonsters || 1,
+        maxMonsters: config.maxMonsters || 3,
+        eliteChance: config.eliteChance || 0.2,
+        specialAbilityChance: config.specialAbilityChance || 0.1,
+        // Keep other config properties for backward compatibility
+        timeLimit: config.timeLimit || 120,
+        environments: config.environments || ["cave"],
+        enemyTypes: config.enemyTypes || ["monster"],
+        // Legacy properties for fallback
+        monsterCount:
+          config.monsterCount || event.eventData?.enemies?.length || 2,
+        monsterHealth: config.monsterHealth || 80,
+        monsterAttack: config.monsterAttack || 8,
+        attackInterval: config.attackInterval || 4,
+        monsterName: config.monsterName || "Monster",
+      };
+
+      return combatConfig;
+    }
+
+    // For other minigames, return the event data as-is
+    return event.eventData || {};
+  };
+
   const eventType = event.type || event.template?.type || "UNKNOWN";
   const availableActions = getAvailableActions(eventType, event.eventData);
+  const minigameType = getMinigameTypeForEvent(event);
+  const requiresMinigame = minigameType !== "NONE";
 
   return (
     <div className={`border-2 rounded-lg p-6 ${getEventTypeColor(eventType)}`}>
@@ -531,6 +595,10 @@ export function EventCard({
           <p className="text-gray-300 text-sm">
             {event.template?.description ||
               `A ${eventType.toLowerCase()} event`}
+          </p>
+          <p className="text-xs text-gray-500">
+            Status: {event.status} | ID: {event.id} | Actions:{" "}
+            {event.playerActions.length}
           </p>
         </div>
       </div>
@@ -570,6 +638,9 @@ export function EventCard({
                   {action.character?.name || "Unknown Player"}
                 </span>
                 : {action.actionType}
+                <span className="text-xs text-gray-500 ml-2">
+                  (Event: {event.id}, Action: {action.id})
+                </span>
               </div>
             ))}
           </div>
@@ -707,73 +778,116 @@ export function EventCard({
         </div>
       )}
 
-      {/* Action Selection */}
+      {/* Minigame or Action Selection */}
       {!hasSubmitted && event.status === "ACTIVE" && (
         <div className="space-y-4">
-          <h4 className="text-white font-semibold">Choose Your Action:</h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {availableActions.map((action) => {
-              const getRiskColor = (risk: string) => {
-                switch (risk) {
-                  case "none":
-                    return "text-green-400";
-                  case "low":
-                    return "text-blue-400";
-                  case "medium":
-                    return "text-yellow-400";
-                  case "high":
-                    return "text-orange-400";
-                  case "very_high":
-                    return "text-red-400";
-                  default:
-                    return "text-gray-400";
-                }
-              };
+          {requiresMinigame ? (
+            <div className="space-y-4">
+              {!showMinigame ? (
+                <div className="text-center">
+                  <h4 className="text-white font-semibold mb-4">
+                    {eventType === "COMBAT" || eventType === "BOSS"
+                      ? "Combat Challenge"
+                      : `${eventType} Challenge`}
+                  </h4>
+                  <p className="text-gray-300 mb-4">
+                    {eventType === "COMBAT" || eventType === "BOSS"
+                      ? "Click monsters to attack! They'll fight back every few seconds."
+                      : `This ${eventType.toLowerCase()} requires a minigame challenge.`}
+                  </p>
+                  <button
+                    onClick={handleStartMinigame}
+                    className="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-semibold text-lg"
+                  >
+                    Start Challenge
+                  </button>
+                </div>
+              ) : (
+                <MinigameContainer
+                  type={minigameType}
+                  config={getMinigameConfig(event, minigameType)}
+                  playerStats={playerStats}
+                  partyMembers={partyMembers}
+                  onComplete={handleMinigameComplete}
+                />
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <h4 className="text-white font-semibold">Choose Your Action:</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {availableActions.map((action) => {
+                  const getRiskColor = (risk: string) => {
+                    switch (risk) {
+                      case "none":
+                        return "text-green-400";
+                      case "low":
+                        return "text-blue-400";
+                      case "medium":
+                        return "text-yellow-400";
+                      case "high":
+                        return "text-orange-400";
+                      case "very_high":
+                        return "text-red-400";
+                      default:
+                        return "text-gray-400";
+                    }
+                  };
 
-              return (
-                <button
-                  key={action.id}
-                  onClick={() => setSelectedAction(action.id)}
-                  className={`p-3 rounded-lg border-2 text-left transition-colors ${
-                    selectedAction === action.id
-                      ? "border-blue-500 bg-blue-900/30"
-                      : "border-gray-600 bg-gray-800/50 hover:border-gray-500"
-                  }`}
-                >
-                  <div className="flex items-center space-x-2 mb-1">
-                    <span className="text-lg">{action.icon}</span>
-                    <div className="font-semibold text-white">
-                      {action.label}
-                    </div>
-                    <span className={`text-xs ${getRiskColor(action.risk)}`}>
-                      {action.risk.replace("_", " ").toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="text-gray-400 text-sm">
-                    {action.description}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+                  return (
+                    <button
+                      key={action.id}
+                      onClick={() => setSelectedAction(action.id)}
+                      className={`p-3 rounded-lg border-2 text-left transition-colors ${
+                        selectedAction === action.id
+                          ? "border-blue-500 bg-blue-900/30"
+                          : "border-gray-600 bg-gray-800/50 hover:border-gray-500"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2 mb-1">
+                        <span className="text-lg">{action.icon}</span>
+                        <div className="font-semibold text-white">
+                          {action.label}
+                        </div>
+                        <span
+                          className={`text-xs ${getRiskColor(action.risk)}`}
+                        >
+                          {action.risk.replace("_", " ").toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="text-gray-400 text-sm">
+                        {action.description}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
 
-          {selectedAction && (
-            <div className="flex justify-end">
-              <button
-                onClick={handleActionSubmit}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
-              >
-                Submit Action
-              </button>
+              {selectedAction && (
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleActionSubmit}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-semibold"
+                  >
+                    Submit Action
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
       )}
 
       {hasSubmitted && (
-        <div className="text-center p-4 bg-green-900/20 border border-green-500 rounded-lg">
-          <p className="text-green-400 font-semibold">Action Submitted!</p>
-          <p className="text-gray-300 text-sm">Waiting for other players...</p>
+        <div className="text-center p-4 bg-blue-900/20 border border-blue-500 rounded-lg">
+          <p className="text-blue-400 font-semibold">Action Submitted!</p>
+          <p className="text-gray-300 text-sm">
+            {event.status === "RESOLVING"
+              ? "Resolving event..."
+              : event.status === "COMPLETED"
+              ? "Event completed!"
+              : "Processing your action..."}
+          </p>
         </div>
       )}
 
