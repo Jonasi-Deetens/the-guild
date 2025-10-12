@@ -100,23 +100,30 @@ model Character {
 }
 
 model Mission {
-  id               String           @id @default(cuid())
+  id               String  @id @default(cuid())
   name             String
   description      String
   difficulty       Int
-  minLevel         Int              @default(1)
-  maxPlayers       Int              @default(5)
-  minPlayers       Int              @default(2)
+  minLevel         Int     @default(1)
+  maxPlayers       Int     @default(5)
+  minPlayers       Int     @default(2)
   baseReward       Int
-  experienceReward Int              @default(10)
-  isActive         Boolean          @default(true)
-  baseDuration     Int              @default(600)
-  minEventInterval Int              @default(30)
-  maxEventInterval Int              @default(90)
-  environmentType  String           @default("dungeon_corridor")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  dungeonSessions  DungeonSession[]
+  experienceReward Int     @default(10)
+  isActive         Boolean @default(true)
+  baseDuration     Int     @default(600)
+  minEventInterval Int     @default(30)
+  maxEventInterval Int     @default(90)
+  environmentType  String  @default("dungeon_corridor")
+
+  // NEW FIELDS
+  missionType             String  @default("TIMED") // TIMED, CLEAR, SURVIVAL
+  failCondition           String  @default("TIME_OR_DEATH") // TIME_OR_DEATH, DEATH_ONLY, BOSS_DEFEAT
+  bossTemplateId          String? // Boss to spawn (for CLEAR missions)
+  maxMonstersPerEncounter Int     @default(4) // Max enemies per combat event
+
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  dungeonSessions DungeonSession[]
 }
 
 model Party {

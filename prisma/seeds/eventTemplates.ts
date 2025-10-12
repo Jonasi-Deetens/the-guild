@@ -121,6 +121,75 @@ async function main() {
         flee: { experience: 30, gold: 0 },
       },
     },
+    // Training Ground Combat Events
+    {
+      type: "COMBAT",
+      name: "Dummy Practice",
+      description: "Practice your combat skills on training dummies.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["training_dummy"],
+        monsterTemplateIds: ["cmgo9dozm000oumwoxptie3rm"], // Training Dummy
+        minMonsters: 1,
+        maxMonsters: 2,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 5, gold: 10 },
+        defeat: { experience: 1, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Advanced Practice",
+      description: "Face multiple training dummies at once.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["training_dummy", "advanced_training_dummy"],
+        monsterTemplateIds: [
+          "cmgo9dozm000oumwoxptie3rm",
+          "cmgo9dozs000pumwom5ipal48",
+        ], // Training Dummy, Advanced Training Dummy
+        minMonsters: 2,
+        maxMonsters: 3,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 8, gold: 15 },
+        defeat: { experience: 2, gold: 0 },
+      },
+    },
+    // Boss event (spawns at end for CLEAR missions)
+    {
+      type: "BOSS",
+      name: "Master Dummy Challenge",
+      description:
+        "Face the ultimate training challenge - the Master Training Dummy!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 180,
+        environments: ["training_ground"],
+        enemyTypes: ["master_training_dummy"],
+        monsterTemplateIds: ["cmgo9dozx000qumwojwn8r0nk"], // Master Training Dummy
+        minMonsters: 1,
+        maxMonsters: 1,
+        eliteChance: 0,
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 15, gold: 50 },
+        defeat: { experience: 3, gold: 0 },
+      },
+    },
   ];
 
   // Treasure Event Templates

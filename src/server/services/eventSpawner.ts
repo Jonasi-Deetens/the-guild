@@ -29,7 +29,13 @@ export class EventSpawner {
   static async checkForEventSpawn(sessionId: string): Promise<boolean> {
     const session = await db.dungeonSession.findUnique({
       where: { id: sessionId },
-      include: { mission: true },
+      include: {
+        mission: true,
+        events: {
+          where: { status: { in: ["PENDING", "ACTIVE"] } },
+          orderBy: { eventNumber: "asc" },
+        },
+      },
     });
 
     if (!session || session.status !== "ACTIVE") {
@@ -39,6 +45,17 @@ export class EventSpawner {
     // Don't spawn if there's already an active event
     if (session.currentEventId) {
       return false;
+    }
+
+    // Check if there are any PENDING events that should be activated
+    const pendingEvents = session.events.filter(
+      (event) => event.status === "PENDING"
+    );
+    if (pendingEvents.length > 0) {
+      // Activate the next pending event instead of creating a new one
+      const nextEvent = pendingEvents[0];
+      await this.activatePendingEvent(sessionId, nextEvent.id);
+      return false; // Don't create a new event
     }
 
     // Check if we have a next spawn time and if it's time to spawn
@@ -65,6 +82,41 @@ export class EventSpawner {
     }
 
     return false;
+  }
+
+  /**
+   * Activate a pending event instead of creating a new one
+   */
+  static async activatePendingEvent(
+    sessionId: string,
+    eventId: string
+  ): Promise<void> {
+    console.log(
+      `🔄 Activating pending event ${eventId} for session ${sessionId}`
+    );
+
+    // Update the event status to ACTIVE
+    await db.dungeonEvent.update({
+      where: { id: eventId },
+      data: {
+        status: "ACTIVE",
+        startsAt: new Date(),
+      },
+    });
+
+    // Update session to set this as the current event and pause timer
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        currentEventId: eventId,
+        pausedAt: new Date(),
+        nextEventSpawnTime: null, // Will be set when event completes
+      },
+    });
+
+    console.log(
+      `✅ Activated pending event ${eventId} for session ${sessionId}`
+    );
   }
 
   /**
@@ -98,50 +150,52 @@ export class EventSpawner {
       },
     });
 
-    if (templates.length === 0) {
+    // Filter templates by environment from config
+    const validTemplates = templates.filter((template) => {
+      const config = template.config as any;
+      if (!config.environments) return true; // No restriction
+      return config.environments.includes(session.mission.environmentType);
+    });
+
+    if (validTemplates.length === 0) {
       console.warn(
-        `No event templates found for type ${eventType} and difficulty ${session.mission.difficulty}`
+        `No valid event templates found for type ${eventType}, difficulty ${session.mission.difficulty}, and environment ${session.mission.environmentType}`
       );
       return null;
     }
 
-    // Select random template
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    // Select random template from valid ones
+    const template =
+      validTemplates[Math.floor(Math.random() * validTemplates.length)];
 
     // Generate fresh event data
     const eventData = this.generateEventData(
       template,
-      session.mission.difficulty
+      session.mission.difficulty,
+      session.mission
     );
 
-    // Create the event
+    // Create the event with PENDING status initially
     const event = await db.dungeonEvent.create({
       data: {
         sessionId: sessionId,
         templateId: template.id,
         eventNumber: session.events.length + 1,
-        status: "ACTIVE",
+        status: "PENDING",
         eventData: eventData,
-        startsAt: new Date(),
+        startsAt: null, // Will be set when activated
       },
     });
 
-    console.log(`🎲 Created fresh event:`, {
+    console.log(`🎲 Created pending event:`, {
       id: event.id,
       eventNumber: event.eventNumber,
       status: event.status,
       hasPlayerActions: false, // Fresh events should have no player actions
     });
 
-    // Update session to pause timer and set current event
-    await db.dungeonSession.update({
-      where: { id: sessionId },
-      data: {
-        currentEventId: event.id,
-        pausedAt: new Date(),
-        nextEventSpawnTime: null, // Will be set when event completes
-      },
-    });
+    // Immediately activate the event since we're spawning it now
+    await this.activatePendingEvent(sessionId, event.id);
 
     console.log(`🎲 Spawned ${eventType} event for session ${sessionId}`);
     return event.id;
@@ -260,7 +314,11 @@ export class EventSpawner {
   /**
    * Generate event-specific data based on template and difficulty
    */
-  private static generateEventData(template: any, difficulty: number): any {
+  private static generateEventData(
+    template: any,
+    difficulty: number,
+    mission: any
+  ): any {
     const baseData = {
       difficulty: difficulty,
       timestamp: new Date().toISOString(),
@@ -270,7 +328,10 @@ export class EventSpawner {
       case EventType.COMBAT:
         return {
           ...baseData,
-          enemyCount: Math.min(3, Math.floor(difficulty / 2) + 1),
+          enemyCount: Math.min(
+            mission.maxMonstersPerEncounter || 4,
+            Math.floor(difficulty / 2) + 1
+          ),
           enemyLevel: difficulty * 2,
         };
 
@@ -386,5 +447,72 @@ export class EventSpawner {
     console.log(
       `🎯 Initialized mission ${sessionId}, first event spawn at ${firstSpawnTime.toISOString()}`
     );
+  }
+
+  /**
+   * Spawn a boss event (for CLEAR missions when timer expires)
+   */
+  static async spawnBossEvent(
+    sessionId: string,
+    bossTemplateId: string
+  ): Promise<string> {
+    const template = await db.eventTemplate.findUnique({
+      where: { id: bossTemplateId },
+    });
+
+    if (!template) throw new Error("Boss template not found");
+
+    console.log(`🎯 Spawning boss event with template:`, {
+      id: template.id,
+      type: template.type,
+      name: template.name,
+    });
+
+    const session = await db.dungeonSession.findUnique({
+      where: { id: sessionId },
+      include: { mission: true },
+    });
+
+    if (!session) throw new Error("Session not found");
+
+    // Pause timer during boss fight
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        pausedAt: new Date(),
+      },
+    });
+
+    // Create boss event
+    const eventData = this.generateEventData(
+      template,
+      session.mission.difficulty,
+      session.mission
+    );
+
+    const event = await db.dungeonEvent.create({
+      data: {
+        sessionId: sessionId,
+        templateId: template.id,
+        eventNumber:
+          (await db.dungeonEvent.count({ where: { sessionId } })) + 1,
+        status: "ACTIVE",
+        eventData: eventData,
+        startsAt: new Date(),
+      },
+    });
+
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: { currentEventId: event.id },
+    });
+
+    console.log(`🎯 Boss event created:`, {
+      eventId: event.id,
+      templateType: template.type,
+      status: event.status,
+    });
+
+    return event.id;
   }
 }

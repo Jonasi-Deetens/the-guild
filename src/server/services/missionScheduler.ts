@@ -75,27 +75,32 @@ export class MissionScheduler {
   private static async processMission(session: any): Promise<void> {
     const now = new Date();
 
-    // Check if mission has timed out
-    if (session.missionEndTime && now >= session.missionEndTime) {
-      await this.handleMissionTimeout(session);
-      return;
-    }
+    // Check mission type specific logic
+    if (session.mission.missionType === "CLEAR") {
+      // For CLEAR missions, check if timer expired -> spawn boss
+      if (session.missionEndTime && now >= session.missionEndTime) {
+        await this.handleClearMissionTimeout(session);
+        return;
+      }
 
-    // Check if all party members are dead
-    if (session.party) {
-      const aliveMembers = session.party.members.filter(
-        (member: any) => member.character.currentHealth > 0
-      );
+      // Check fail condition
+      if (session.mission.failCondition === "DEATH_ONLY") {
+        if (await this.checkAllPlayersDead(session)) {
+          await this.handleMissionFailure(session, "All players died");
+          return;
+        }
+      }
+    } else {
+      // TIMED missions - original logic
+      if (session.missionEndTime && now >= session.missionEndTime) {
+        await this.handleMissionTimeout(session);
+        return;
+      }
 
-      if (aliveMembers.length === 0) {
+      if (await this.checkAllPlayersDead(session)) {
         await this.handleMissionFailure(session, "All party members are dead");
         return;
       }
-    } else {
-      // Solo mission - for now, skip character health check
-      // TODO: Implement proper solo mission character tracking
-      // This would require adding a characterId field to DungeonSession
-      // or creating a separate table to track character-session relationships
     }
 
     // Check if it's time to spawn an event
@@ -368,5 +373,92 @@ export class MissionScheduler {
         totalPausedTime: session.totalPausedTime + pauseDuration,
       },
     });
+  }
+
+  /**
+   * Handle CLEAR mission timeout (spawn boss instead of failing)
+   */
+  private static async handleClearMissionTimeout(session: any): Promise<void> {
+    console.log(`⏰ CLEAR Mission ${session.id} timer expired - spawning boss`);
+
+    // Check if boss is already spawned or mission is already completed
+    if (session.status === "COMPLETED" || session.status === "FAILED") {
+      console.log(
+        `⏰ Mission ${session.id} already completed/failed, skipping boss spawn`
+      );
+      return;
+    }
+
+    if (session.mission.bossTemplateId) {
+      const { EventSpawner } = await import("./eventSpawner");
+      await EventSpawner.spawnBossEvent(
+        session.id,
+        session.mission.bossTemplateId
+      );
+    } else {
+      // No boss template - complete mission as success
+      await this.handleMissionSuccess(
+        session,
+        "Mission completed - no boss to fight"
+      );
+    }
+  }
+
+  /**
+   * Check if all players are dead
+   */
+  private static async checkAllPlayersDead(session: any): Promise<boolean> {
+    if (session.party) {
+      const aliveMembers = session.party.members.filter(
+        (member: any) => member.character.currentHealth > 0
+      );
+      return aliveMembers.length === 0;
+    } else {
+      // Solo mission - need to check session owner's character health
+      // This requires tracking characterId on DungeonSession
+      // For now, return false as placeholder
+      return false;
+    }
+  }
+
+  /**
+   * Handle mission success
+   */
+  public static async handleMissionSuccess(
+    session: any,
+    reason: string
+  ): Promise<void> {
+    console.log(`✅ Mission ${session.id} completed successfully: ${reason}`);
+    console.log(`🔍 handleMissionSuccess called with session:`, {
+      id: session.id,
+      status: session.status,
+      missionId: session.missionId,
+    });
+
+    await db.dungeonSession.update({
+      where: { id: session.id },
+      data: {
+        status: "COMPLETED",
+        completedAt: new Date(),
+      },
+    });
+
+    // Apply final rewards
+    const { RewardService } = await import("./rewardService");
+    await RewardService.applyMissionRewards(session.id);
+
+    // Notify party members
+    await this.notifyMissionSuccess(session, reason);
+  }
+
+  /**
+   * Notify party members of mission success
+   */
+  private static async notifyMissionSuccess(
+    session: any,
+    reason: string
+  ): Promise<void> {
+    // TODO: Implement WebSocket notification for mission success
+    console.log(`📢 Mission ${session.id} success notification: ${reason}`);
   }
 }

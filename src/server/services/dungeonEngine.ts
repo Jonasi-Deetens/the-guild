@@ -417,7 +417,6 @@ export class DungeonEngine {
       enemyDamageDealt: 0,
     };
 
-
     // Increment turn count
     combatState.turnCount++;
 
@@ -892,29 +891,28 @@ export class DungeonEngine {
     action: string,
     actionData: any
   ): Promise<any> {
-    // Similar to combat but with higher stakes
-    const eventData = event.eventData as any;
-    const bossLevel = eventData.bossLevel || 1;
-    const damage = this.calculateDamage(character, bossLevel);
+    console.log(`🎯 Processing boss action:`, {
+      eventId: event.id,
+      action: action,
+      hasActionData: !!actionData,
+    });
 
-    if (action === "attack") {
-      const isCritical = Math.random() < character.criticalChance;
-      const finalDamage = isCritical ? damage * 2 : damage;
+    // Boss actions are handled the same as combat actions
+    // This ensures minigame completion works properly
+    const result = await this.processCombatAction(
+      event,
+      character,
+      action,
+      actionData
+    );
 
-      return {
-        success: true,
-        message: isCritical
-          ? `Critical hit on boss! Dealt ${finalDamage} damage!`
-          : `Dealt ${finalDamage} damage to boss!`,
-        damage: finalDamage,
-        isCritical: isCritical,
-      };
-    }
+    console.log(`🎯 Boss action result:`, {
+      success: result.success,
+      victory: result.victory,
+      defeat: result.defeat,
+    });
 
-    return {
-      success: false,
-      message: "Invalid boss action",
-    };
+    return result;
   }
 
   /**
@@ -1092,6 +1090,30 @@ export class DungeonEngine {
 
     // Complete the event in the spawner
     await EventSpawner.completeEvent(sessionId, eventId);
+
+    // Check if this was a boss victory that should complete the mission
+    console.log(`🔍 Checking boss victory:`, {
+      eventType: event.template?.type,
+      hasVictory: results?.victory === true,
+      results: results,
+    });
+
+    if (event.template?.type === "BOSS" && results?.victory === true) {
+      console.log(`🎉 Boss defeated! Completing mission...`);
+
+      // Get the session to complete the mission
+      const session = await db.dungeonSession.findUnique({
+        where: { id: sessionId },
+        include: { mission: true },
+      });
+
+      if (session) {
+        // Import MissionScheduler to complete the mission
+        const { MissionScheduler } = await import("./missionScheduler");
+        await MissionScheduler.handleMissionSuccess(session, "Boss defeated!");
+        return; // Don't continue with normal event completion
+      }
+    }
 
     // Check if this was a combat defeat that should fail the mission
     if (event.template?.type === "COMBAT" && results?.defeat === true) {

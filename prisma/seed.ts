@@ -16,7 +16,15 @@ async function main() {
       maxPlayers: 1,
       minPlayers: 1,
       baseReward: 50,
-      experienceReward: 20,
+      experienceReward: 5, // Reduced from 20
+      baseDuration: 120, // 2 minutes
+      minEventInterval: 20,
+      maxEventInterval: 40,
+      environmentType: "training_ground",
+      missionType: "CLEAR",
+      failCondition: "DEATH_ONLY",
+      bossTemplateId: "cmgo9fl1u0006um7kqz00sxui", // Master Dummy Challenge boss event
+      maxMonstersPerEncounter: 3,
       isActive: true,
     },
     {
@@ -41,6 +49,13 @@ async function main() {
       minPlayers: 2,
       baseReward: 100,
       experienceReward: 30,
+      baseDuration: 600,
+      minEventInterval: 30,
+      maxEventInterval: 60,
+      environmentType: "cave",
+      missionType: "TIMED",
+      failCondition: "TIME_OR_DEATH",
+      maxMonstersPerEncounter: 4,
       isActive: true,
     },
     {
@@ -65,6 +80,13 @@ async function main() {
       minPlayers: 2,
       baseReward: 250,
       experienceReward: 60,
+      baseDuration: 900,
+      minEventInterval: 40,
+      maxEventInterval: 80,
+      environmentType: "cave",
+      missionType: "TIMED",
+      failCondition: "TIME_OR_DEATH",
+      maxMonstersPerEncounter: 5,
       isActive: true,
     },
     {

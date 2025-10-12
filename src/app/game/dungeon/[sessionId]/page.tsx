@@ -30,10 +30,6 @@ export default function DungeonPage() {
     sendChatMessage,
   } = useDungeonSession();
 
-  // Debug logging for mission status
-  console.log("🔍 Dungeon Page - Session status:", session?.status);
-  console.log("🔍 Dungeon Page - Show completion:", showCompletion);
-
   const handleMinigameComplete = (result: unknown) => {
     setShowMinigame(false);
     submitAction("minigame_complete", result);
