@@ -1066,14 +1066,24 @@ export class DungeonEngine {
     sessionId: string,
     eventId: string
   ): Promise<void> {
+    console.log(`🔍 Resolving event ${eventId} for session ${sessionId}`);
+
     const event = await db.dungeonEvent.findUnique({
       where: { id: eventId },
       include: { template: true, playerActions: true },
     });
 
     if (!event) {
+      console.log(`❌ Event ${eventId} not found`);
       return;
     }
+
+    console.log(`🔍 Event found:`, {
+      id: event.id,
+      type: event.template?.type,
+      status: event.status,
+      playerActionsCount: event.playerActions.length,
+    });
 
     // Calculate final results based on all actions
     const results = await this.calculateEventResults(event);
@@ -1115,8 +1125,11 @@ export class DungeonEngine {
       }
     }
 
-    // Check if this was a combat defeat that should fail the mission
-    if (event.template?.type === "COMBAT" && results?.defeat === true) {
+    // Check if this was a combat or boss defeat that should fail the mission
+    if (
+      (event.template?.type === "COMBAT" || event.template?.type === "BOSS") &&
+      results?.defeat === true
+    ) {
       console.log(
         `💀 Combat defeat detected, checking if mission should fail...`
       );
@@ -1180,14 +1193,38 @@ export class DungeonEngine {
     const actions = event.playerActions;
     const eventType = event.template?.type as EventType;
 
-    // This is a simplified version - in reality, you'd have more complex logic
-    // based on the event type and all player actions
+    console.log(`🔍 Calculating event results for ${eventType} event:`, {
+      eventId: event.id,
+      actionsCount: actions.length,
+      actions: actions.map((a) => ({
+        actionType: a.actionType,
+        result: a.result,
+        characterId: a.characterId,
+      })),
+    });
 
+    // Aggregate results from all player actions
     const results = {
       eventType: eventType,
       totalActions: actions.length,
       timestamp: new Date().toISOString(),
     };
+
+    // For combat/boss events, check if any action resulted in victory or defeat
+    if (eventType === "COMBAT" || eventType === "BOSS") {
+      const lastAction = actions[actions.length - 1];
+      if (lastAction?.result) {
+        results.victory = lastAction.result.victory === true;
+        results.defeat = lastAction.result.defeat === true;
+        results.success = lastAction.result.success === true;
+
+        console.log(`🔍 Combat/Boss event results:`, {
+          victory: results.victory,
+          defeat: results.defeat,
+          success: results.success,
+        });
+      }
+    }
 
     return results;
   }

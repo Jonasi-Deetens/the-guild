@@ -414,9 +414,27 @@ export class MissionScheduler {
       );
       return aliveMembers.length === 0;
     } else {
-      // Solo mission - need to check session owner's character health
-      // This requires tracking characterId on DungeonSession
-      // For now, return false as placeholder
+      // Solo mission - check if the character is dead
+      // Find the character by looking at recent player actions
+      const recentAction = await db.dungeonPlayerAction.findFirst({
+        where: {
+          event: { sessionId: session.id },
+        },
+        include: { character: true },
+        orderBy: { submittedAt: "desc" },
+      });
+
+      if (recentAction?.character) {
+        const isDead = recentAction.character.currentHealth <= 0;
+        console.log(`🔍 Solo mission death check:`, {
+          sessionId: session.id,
+          characterId: recentAction.character.id,
+          currentHealth: recentAction.character.currentHealth,
+          isDead: isDead,
+        });
+        return isDead;
+      }
+
       return false;
     }
   }
