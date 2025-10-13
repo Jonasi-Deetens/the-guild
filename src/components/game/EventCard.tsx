@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MinigameContainer, getMinigameTypeForEvent } from "./minigames";
 
 interface EventCardProps {
@@ -546,6 +546,26 @@ export function EventCard({
     setShowMinigame(true);
   };
 
+  // Check if we have saved combat state - if so, auto-start the minigame
+  const hasSavedCombatState =
+    event?.eventData?.combatState &&
+    (event.eventData.combatState.monsters ||
+      event.eventData.combatState.turnCount > 0);
+
+  // Auto-start minigame if we have saved state, otherwise show start button
+  const shouldShowStartButton = !showMinigame && !hasSavedCombatState;
+  const shouldShowMinigame = showMinigame || hasSavedCombatState;
+
+  // Auto-start minigame when we detect saved combat state
+  useEffect(() => {
+    if (hasSavedCombatState && !showMinigame) {
+      console.log(
+        "🔄 [EventCard] Auto-starting minigame due to saved combat state"
+      );
+      setShowMinigame(true);
+    }
+  }, [hasSavedCombatState, showMinigame]);
+
   const getMinigameConfig = (event: any, minigameType: string) => {
     if (minigameType === "COMBAT_CLICKER") {
       // Use template config if available, otherwise use defaults
@@ -585,7 +605,11 @@ export function EventCard({
   const requiresMinigame = minigameType !== "NONE";
 
   return (
-    <div className={`border-2 rounded-lg p-6 ${getEventTypeColor(eventType)}`}>
+    <div
+      className={`bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8 max-w-4xl w-full mx-4 shadow-2xl ${getEventTypeColor(
+        eventType
+      )}`}
+    >
       <div className="flex items-center space-x-3 mb-4">
         <span className="text-2xl">{getEventTypeIcon(eventType)}</span>
         <div>
@@ -604,8 +628,8 @@ export function EventCard({
       </div>
 
       {/* Event Data Display */}
-      {event.eventData && (
-        <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
+      {event.eventData && minigameType !== "COMBAT_CLICKER" && (
+        <div className="mb-4 p-3 bg-black/10 backdrop-blur-sm border border-white/5 rounded-lg">
           <h4 className="text-white font-semibold mb-2">Event Details:</h4>
           <div className="text-gray-300 text-sm space-y-1">
             {event.type === "COMBAT" && event.eventData.enemies && (
@@ -783,7 +807,7 @@ export function EventCard({
         <div className="space-y-4">
           {requiresMinigame ? (
             <div className="space-y-4">
-              {!showMinigame ? (
+              {shouldShowStartButton ? (
                 <div className="text-center">
                   <h4 className="text-white font-semibold mb-4">
                     {eventType === "COMBAT" || eventType === "BOSS"
@@ -802,15 +826,16 @@ export function EventCard({
                     Start Challenge
                   </button>
                 </div>
-              ) : (
+              ) : shouldShowMinigame ? (
                 <MinigameContainer
                   type={minigameType}
                   config={getMinigameConfig(event, minigameType)}
                   playerStats={playerStats}
                   partyMembers={partyMembers}
+                  event={event}
                   onComplete={handleMinigameComplete}
                 />
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="space-y-4">
@@ -892,17 +917,6 @@ export function EventCard({
       )}
 
       {/* Player Stats Display */}
-      <div className="mt-4 p-3 bg-gray-800/30 rounded-lg">
-        <h5 className="text-white font-semibold mb-2">Your Stats:</h5>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="text-gray-300">Speed: {playerStats.speed}</div>
-          <div className="text-gray-300">
-            Perception: {playerStats.perception}
-          </div>
-          <div className="text-gray-300">Attack: {playerStats.attack}</div>
-          <div className="text-gray-300">Defense: {playerStats.defense}</div>
-        </div>
-      </div>
     </div>
   );
 }

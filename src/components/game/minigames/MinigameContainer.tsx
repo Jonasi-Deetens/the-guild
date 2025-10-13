@@ -36,6 +36,11 @@ interface MinigameContainerProps {
     agility?: number;
     blockStrength?: number;
   }>;
+  event?: {
+    eventData?: {
+      combatState?: any;
+    };
+  };
 }
 
 export function MinigameContainer({
@@ -44,6 +49,7 @@ export function MinigameContainer({
   onComplete,
   playerStats,
   partyMembers = [],
+  event,
 }: MinigameContainerProps) {
   switch (type) {
     case "JUMPING_GAPS":
@@ -92,6 +98,7 @@ export function MinigameContainer({
           config={config}
           playerStats={playerStats}
           partyMembers={partyMembers}
+          event={event}
           onComplete={onComplete}
         />
       );

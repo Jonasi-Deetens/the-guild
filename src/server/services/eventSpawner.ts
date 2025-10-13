@@ -42,8 +42,17 @@ export class EventSpawner {
       return false;
     }
 
-    // Don't spawn if there's already an active event
+    // Don't spawn if there's an active event
     if (session.currentEventId) {
+      console.log(
+        `⏸️ Event ${session.currentEventId} is active, skipping spawn`
+      );
+      return false;
+    }
+
+    // Don't spawn if mission is paused
+    if (session.pausedAt) {
+      console.log(`⏸️ Mission is paused, skipping spawn`);
       return false;
     }
 
@@ -95,12 +104,45 @@ export class EventSpawner {
       `🔄 Activating pending event ${eventId} for session ${sessionId}`
     );
 
-    // Update the event status to ACTIVE
+    // Get the event with its template
+    const event = await db.dungeonEvent.findUnique({
+      where: { id: eventId },
+      include: { template: true },
+    });
+
+    if (!event) {
+      throw new Error(`Event ${eventId} not found`);
+    }
+
+    // Generate monsters for combat events
+    let updatedEventData = event.eventData;
+    if (event.template?.type === "COMBAT") {
+      console.log(`🎯 Generating monsters for combat event ${eventId}`);
+      const monsters = await this.generateMonstersForEvent(event.template);
+
+      // Add initial combat state with generated monsters
+      const combatState = {
+        monsters: monsters,
+        turnCount: 0,
+        playerDamageDealt: 0,
+        enemyDamageDealt: {}, // Should be Record<string, number>, not a number
+        monstersDefeated: 0,
+        partyHealthUpdates: {},
+      };
+
+      updatedEventData = {
+        ...event.eventData,
+        combatState: combatState,
+      };
+    }
+
+    // Update the event status to ACTIVE with generated monsters
     await db.dungeonEvent.update({
       where: { id: eventId },
       data: {
         status: "ACTIVE",
         startsAt: new Date(),
+        eventData: updatedEventData,
       },
     });
 
@@ -136,6 +178,15 @@ export class EventSpawner {
     if (session.currentEventId) {
       return null;
     }
+
+    // Before creating event, pause timer
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        pausedAt: new Date(),
+        currentEventId: null, // Will be set after event creation
+      },
+    });
 
     // Get allowed event templates for this mission
     const allowedEventMappings = await db.missionEventTemplate.findMany({
@@ -246,7 +297,7 @@ export class EventSpawner {
       },
     });
 
-    // Calculate pause duration and add to total
+    // Resume timer after event completion
     const pauseDuration = session.pausedAt
       ? Math.floor((Date.now() - session.pausedAt.getTime()) / 1000)
       : 0;
@@ -262,7 +313,7 @@ export class EventSpawner {
       where: { id: sessionId },
       data: {
         currentEventId: null,
-        pausedAt: null,
+        pausedAt: null, // Resume timer
         totalPausedTime: session.totalPausedTime + pauseDuration,
         nextEventSpawnTime: nextSpawnTime,
       },
@@ -456,6 +507,19 @@ export class EventSpawner {
       session.mission
     );
 
+    // Generate monsters for boss event immediately
+    const monsters = await this.generateMonstersForEvent(template);
+
+    // Add initial combat state with generated monsters
+    const combatState = {
+      monsters: monsters,
+      turnCount: 0,
+      playerDamageDealt: 0,
+      enemyDamageDealt: {}, // Should be Record<string, number>, not a number
+      monstersDefeated: 0,
+      partyHealthUpdates: {},
+    };
+
     const event = await db.dungeonEvent.create({
       data: {
         sessionId: sessionId,
@@ -463,7 +527,10 @@ export class EventSpawner {
         eventNumber:
           (await db.dungeonEvent.count({ where: { sessionId } })) + 1,
         status: "ACTIVE",
-        eventData: eventData,
+        eventData: {
+          ...eventData,
+          combatState: combatState,
+        },
         startsAt: new Date(),
       },
     });
@@ -480,5 +547,82 @@ export class EventSpawner {
     });
 
     return event.id;
+  }
+
+  /**
+   * Generate monsters for an event template
+   */
+  private static async generateMonstersForEvent(template: any): Promise<any[]> {
+    const config = template.config || {};
+
+    // Fetch monster templates
+    const templates = await db.monsterTemplate.findMany({
+      where: {
+        id: {
+          in: config.monsterTemplateIds || [],
+        },
+      },
+    });
+
+    if (templates.length === 0) {
+      console.log("⚠️ No monster templates found for event");
+      return [];
+    }
+
+    // Determine number of monsters to generate
+    const minMonsters = config.minMonsters || 1;
+    const maxMonsters = config.maxMonsters || 1;
+    const monsterCount =
+      Math.floor(Math.random() * (maxMonsters - minMonsters + 1)) + minMonsters;
+
+    const monsters = [];
+    for (let i = 0; i < monsterCount; i++) {
+      // Pick random template
+      const templateIndex = Math.floor(Math.random() * templates.length);
+      const monsterTemplate = templates[templateIndex];
+
+      // Determine rarity
+      const eliteChance = config.eliteChance || 0.2;
+      const specialAbilityChance = config.specialAbilityChance || 0.3;
+
+      let rarity = "COMMON";
+      if (Math.random() < eliteChance) {
+        rarity = "ELITE";
+      } else if (Math.random() < specialAbilityChance) {
+        rarity = "RARE";
+      }
+
+      // Generate monster instance
+      const monster = {
+        id: `monster-${i}-${Date.now()}`,
+        templateId: monsterTemplate.id,
+        name: monsterTemplate.name,
+        type: monsterTemplate.type,
+        rarity: rarity,
+        health: monsterTemplate.baseHealth,
+        maxHealth: monsterTemplate.baseHealth,
+        attack: monsterTemplate.baseAttack,
+        defense: monsterTemplate.baseDefense,
+        attackInterval: monsterTemplate.attackSpeed,
+        nextAttackTime:
+          Date.now() +
+          monsterTemplate.attackSpeed * 1000 +
+          Math.random() * 2000, // Add 0-2 seconds random offset
+        abilities: monsterTemplate.abilities,
+        description: monsterTemplate.description,
+      };
+
+      monsters.push(monster);
+    }
+
+    console.log(
+      `🎯 Generated ${monsters.length} monsters for boss event:`,
+      monsters.map((m) => ({
+        name: m.name,
+        health: m.health,
+        rarity: m.rarity,
+      }))
+    );
+    return monsters;
   }
 }

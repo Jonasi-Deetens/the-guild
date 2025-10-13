@@ -213,44 +213,17 @@ export function DungeonSessionProvider({
     }
   }, [session?.status]);
 
-  // Polling for event updates (replaces WebSocket for now)
-  useEffect(() => {
-    // Poll when player has submitted action OR when mission is still active
-    // Continue polling until mission is completed or failed
-    if (
-      (hasPlayerSubmittedAction && currentEvent) ||
-      session?.status === "ACTIVE" ||
-      session?.status === "WAITING"
-    ) {
-      const pollInterval = setInterval(() => {
-        refetchSession();
-        refetchCharacter(); // Also refetch character data to get updated stats
-      }, 2000); // Poll every 2 seconds
-
-      return () => {
-        clearInterval(pollInterval);
-      };
-    }
-  }, [
-    hasPlayerSubmittedAction,
-    currentEvent,
-    session?.status,
-    refetchSession,
-    refetchCharacter,
-  ]);
-
-  // Additional polling to catch mission completion/failure
+  // Single polling interval for active missions
   useEffect(() => {
     if (session?.status === "ACTIVE" || session?.status === "WAITING") {
-      const completionPollInterval = setInterval(() => {
+      const interval = setInterval(() => {
         refetchSession();
-      }, 1000); // Poll every 1 second for mission completion
+        refetchCharacter();
+      }, 2000);
 
-      return () => {
-        clearInterval(completionPollInterval);
-      };
+      return () => clearInterval(interval);
     }
-  }, [session?.status, refetchSession]);
+  }, [session?.status, refetchSession, refetchCharacter]);
 
   const partyMembers = useMemo(() => {
     // For party missions, return party members
@@ -315,6 +288,14 @@ export function DungeonSessionProvider({
 
     const now = new Date();
     const endTime = new Date(session.missionEndTime);
+
+    // If mission is paused, don't count down
+    if (session.pausedAt) {
+      const pausedAt = new Date(session.pausedAt);
+      const timeLeft = Math.max(0, endTime.getTime() - pausedAt.getTime());
+      return Math.floor(timeLeft / 1000);
+    }
+
     const timeLeft = Math.max(0, endTime.getTime() - now.getTime());
     return Math.floor(timeLeft / 1000);
   }, [session]);

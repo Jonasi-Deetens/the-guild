@@ -103,11 +103,20 @@ export class MissionScheduler {
       }
     }
 
+    // Don't check timer expiry if mission is paused
+    if (session.pausedAt) {
+      console.log(`⏸️ Mission ${session.id} is paused during event`);
+      return;
+    }
+
     // Check if it's time to spawn an event
     console.log(
       `🔍 Checking event spawn for session ${session.id}, status: ${session.status}, nextSpawnTime: ${session.nextEventSpawnTime}`
     );
-    if (await EventSpawner.checkForEventSpawn(session.id)) {
+    if (
+      !session.currentEventId &&
+      (await EventSpawner.checkForEventSpawn(session.id))
+    ) {
       console.log(`🎲 Spawning event for session ${session.id}`);
       await EventSpawner.spawnEvent(session.id);
     }
@@ -367,14 +376,22 @@ export class MissionScheduler {
   private static async handleClearMissionTimeout(session: any): Promise<void> {
     console.log(`⏰ CLEAR Mission ${session.id} timer expired - spawning boss`);
 
-    // Check if boss is already spawned or mission is already completed
-    if (session.status === "COMPLETED" || session.status === "FAILED") {
-      console.log(
-        `⏰ Mission ${session.id} already completed/failed, skipping boss spawn`
-      );
+    // Check if boss already exists (any status)
+    const existingBossEvent = await db.dungeonEvent.findFirst({
+      where: {
+        sessionId: session.id,
+        template: {
+          type: "BOSS",
+        },
+      },
+    });
+
+    if (existingBossEvent) {
+      console.log(`⏰ Boss event already exists for mission ${session.id}`);
       return;
     }
 
+    // Spawn boss if configured
     if (session.mission.bossTemplateId) {
       const { EventSpawner } = await import("./eventSpawner");
       await EventSpawner.spawnBossEvent(
@@ -382,7 +399,7 @@ export class MissionScheduler {
         session.mission.bossTemplateId
       );
     } else {
-      // No boss template - complete mission as success
+      // No boss - complete mission
       await this.handleMissionSuccess(
         session,
         "Mission completed - no boss to fight"

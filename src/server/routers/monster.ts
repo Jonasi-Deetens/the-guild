@@ -57,6 +57,11 @@ export const monsterRouter = createTRPCRouter({
       })
     )
     .query(async ({ input }) => {
+      console.log(
+        "🔍 [MonsterRouter] generateCombatMonsters called with:",
+        input
+      );
+
       // Fetch monster templates
       const templates = await db.monsterTemplate.findMany({
         where: {
@@ -65,6 +70,15 @@ export const monsterRouter = createTRPCRouter({
           },
         },
       });
+
+      console.log(
+        "🔍 [MonsterRouter] Found templates:",
+        templates.map((t) => ({
+          id: t.id,
+          name: t.name,
+          rarity: t.rarity,
+        }))
+      );
 
       if (templates.length === 0) {
         throw new Error("No monster templates found for the provided IDs");
@@ -75,6 +89,13 @@ export const monsterRouter = createTRPCRouter({
         Math.random() * (input.maxMonsters - input.minMonsters + 1) +
           input.minMonsters
       );
+
+      console.log("🔍 [MonsterRouter] Monster count calculation:", {
+        minMonsters: input.minMonsters,
+        maxMonsters: input.maxMonsters,
+        calculatedCount: monsterCount,
+        randomValue: Math.random(),
+      });
 
       // Generate monster instances
       const monsters = [];
