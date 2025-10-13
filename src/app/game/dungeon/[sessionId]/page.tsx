@@ -8,6 +8,7 @@ import { EventCard } from "@/components/game/EventCard";
 import { MinigameContainer } from "@/components/game/minigames";
 import { PartyMembersSidebar } from "@/components/game/PartyMembersSidebar";
 import { MissionAnimation } from "@/components/game/MissionAnimation";
+import { EnvironmentBackground } from "@/components/game/EnvironmentBackground";
 import { useDungeonSession } from "@/contexts/DungeonSessionContext";
 
 export default function DungeonPage() {
@@ -44,86 +45,122 @@ export default function DungeonPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
-      {/* Party Members Sidebar */}
-      <PartyMembersSidebar
-        partyMembers={partyMembers}
-        partyChat={partyChat}
-        onSendMessage={sendChatMessage}
+    <div className="flex h-screen relative">
+      <EnvironmentBackground
+        environmentType={session.mission.environmentType}
       />
 
-      {/* Main Game Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-amber-900/30 bg-stone-900/50">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-1">
-              {session.mission.name}
-            </h1>
-            <p className="text-gray-300 text-sm mb-2">
-              {session.mission.description}
-            </p>
-            <div className="flex items-center justify-center space-x-4 text-xs text-gray-400">
-              <span>Status: {session.status}</span>
-              <span>•</span>
-              <span>
-                Difficulty:{" "}
-                {Array.from({ length: 5 }, (_, i) => (
-                  <Star
-                    key={i}
-                    className={`inline h-3 w-3 ${
-                      i < session.mission.difficulty
-                        ? "text-yellow-400"
-                        : "text-gray-600"
-                    }`}
-                  />
-                ))}
-              </span>
-              <span>•</span>
-              <span>
-                Environment: {session.mission.environmentType.replace("_", " ")}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Main content with relative z-index */}
+      <div className="relative z-10 flex w-full">
+        {/* Party Members Sidebar */}
+        <PartyMembersSidebar
+          partyMembers={partyMembers}
+          partyChat={partyChat}
+          onSendMessage={sendChatMessage}
+        />
 
-        {/* Mission Timer */}
-        {session.status === "ACTIVE" && (
-          <div className="p-4 border-b border-amber-900/30">
-            <div className="flex items-center justify-center space-x-2">
-              <Clock className="h-5 w-5 text-blue-400" />
-              <span className="text-lg font-semibold text-white">
-                Time Remaining: {Math.floor(remainingTime / 60)}:
-                {(remainingTime % 60).toString().padStart(2, "0")}
-              </span>
-              {session.pausedAt && (
-                <span className="text-sm text-yellow-400 ml-2">
-                  (Paused for event)
+        {/* Main Game Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="p-4 border-b border-amber-900/30 bg-stone-900/50">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-white mb-1">
+                {session.mission.name}
+              </h1>
+              <p className="text-gray-300 text-sm mb-2">
+                {session.mission.description}
+              </p>
+              <div className="flex items-center justify-center space-x-4 text-xs text-gray-400">
+                <span>Status: {session.status}</span>
+                <span>•</span>
+                <span>
+                  Difficulty:{" "}
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <Star
+                      key={i}
+                      className={`inline h-3 w-3 ${
+                        i < session.mission.difficulty
+                          ? "text-yellow-400"
+                          : "text-gray-600"
+                      }`}
+                    />
+                  ))}
                 </span>
-              )}
+                <span>•</span>
+                <span>
+                  Environment:{" "}
+                  {session.mission.environmentType.replace("_", " ")}
+                </span>
+              </div>
             </div>
           </div>
-        )}
 
-        {/* Main Game Window */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl mx-auto">
+          {/* Mission Timer */}
+          {session.status === "ACTIVE" && (
+            <div className="p-4 border-b border-amber-900/30">
+              <div className="flex items-center justify-center space-x-2">
+                <Clock className="h-5 w-5 text-blue-400" />
+                <span className="text-lg font-semibold text-white">
+                  Time Remaining: {Math.floor(remainingTime / 60)}:
+                  {(remainingTime % 60).toString().padStart(2, "0")}
+                </span>
+                {session.pausedAt && (
+                  <span className="text-sm text-yellow-400 ml-2">
+                    (Paused for event)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Main Game Window */}
+          <div className="flex-1 overflow-y-auto p-6">
             {session.status === "WAITING" && (
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-white mb-4">
-                  Mission Ready
-                </h2>
-                <p className="text-gray-300 mb-6">
-                  Duration: {Math.floor(session.mission.baseDuration / 60)}{" "}
-                  minutes
-                </p>
-                <Button
-                  onClick={startMission}
-                  disabled={isLoading}
-                  className="px-8 py-3"
-                >
-                  {isLoading ? "Starting..." : "Start Mission"}
-                </Button>
+              <div className="flex items-center justify-center h-full">
+                {/* Centered Card Container */}
+                <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                  <div className="flex flex-col items-center justify-center">
+                    {/* Mission Icon */}
+                    <div className="text-6xl mb-6 animate-pulse">⚔️</div>
+
+                    {/* Mission Title */}
+                    <h2 className="text-3xl font-bold text-white mb-4">
+                      Mission Ready
+                    </h2>
+
+                    {/* Mission Info */}
+                    <div className="text-center mb-6">
+                      <p className="text-gray-300 mb-2">
+                        {session.mission.name}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Duration:{" "}
+                        {Math.floor(session.mission.baseDuration / 60)} minutes
+                      </p>
+                    </div>
+
+                    {/* Start Button */}
+                    <Button
+                      onClick={startMission}
+                      disabled={isLoading}
+                      className="px-8 py-3 text-lg font-semibold"
+                    >
+                      {isLoading ? "Starting..." : "Start Mission"}
+                    </Button>
+
+                    {/* Environment-specific decorations */}
+                    <div className="mt-6 text-3xl opacity-40">
+                      {session.mission.environmentType === "training_ground" &&
+                        "🥋"}
+                      {session.mission.environmentType === "dungeon_corridor" &&
+                        "🏰"}
+                      {session.mission.environmentType === "cave" && "🕳️"}
+                      {session.mission.environmentType === "forest" && "🌲"}
+                      {session.mission.environmentType === "crypt" && "⚰️"}
+                      {session.mission.environmentType === "ruins" && "🏛️"}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -137,13 +174,15 @@ export default function DungeonPage() {
             )}
 
             {session.status === "ACTIVE" && currentEvent && (
-              <EventCard
-                event={currentEvent}
-                onActionSubmit={submitAction}
-                playerStats={playerStats}
-                hasSubmitted={hasPlayerSubmittedAction}
-                partyMembers={partyMembers}
-              />
+              <div className="max-w-4xl mx-auto">
+                <EventCard
+                  event={currentEvent}
+                  onActionSubmit={submitAction}
+                  playerStats={playerStats}
+                  hasSubmitted={hasPlayerSubmittedAction}
+                  partyMembers={partyMembers}
+                />
+              </div>
             )}
 
             {/* Minigame Modal */}

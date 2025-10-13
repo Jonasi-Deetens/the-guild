@@ -355,9 +355,9 @@ export default function GameLayout({ children }: GameLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-64 flex flex-col h-screen">
         {/* Top bar */}
-        <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4">
+        <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -392,7 +392,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
         </div>
 
         {/* Page content */}
-        <main className="p-6">{children}</main>
+        <main className="flex-1 overflow-hidden">{children}</main>
       </div>
 
       {/* Level Up Notification */}
