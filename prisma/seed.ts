@@ -191,6 +191,61 @@ async function main() {
     }
   }
 
+  // Map event templates to Solo Training Ground mission
+  console.log("🔗 Mapping event templates to missions...");
+
+  const trainingGroundMission = await prisma.mission.findFirst({
+    where: { name: "Solo Training Ground" },
+  });
+
+  if (trainingGroundMission) {
+    const trainingEventTemplates = await prisma.eventTemplate.findMany({
+      where: {
+        OR: [
+          { name: "Dummy Practice" },
+          { name: "Advanced Practice" },
+          { name: "Sparring Session" },
+        ],
+      },
+    });
+
+    console.log(
+      `📋 Found ${trainingEventTemplates.length} training event templates`
+    );
+
+    // Create mappings with weights
+    for (const template of trainingEventTemplates) {
+      const existingMapping = await prisma.missionEventTemplate.findFirst({
+        where: {
+          missionId: trainingGroundMission.id,
+          eventTemplateId: template.id,
+        },
+      });
+
+      if (!existingMapping) {
+        const weight = template.name === "Sparring Session" ? 3 : 1; // Higher weight for sparring
+        await prisma.missionEventTemplate.create({
+          data: {
+            missionId: trainingGroundMission.id,
+            eventTemplateId: template.id,
+            weight: weight,
+          },
+        });
+        console.log(
+          `🔗 Mapped ${template.name} to Solo Training Ground (weight: ${weight})`
+        );
+      } else {
+        console.log(
+          `⊘ Mapping already exists: ${template.name} -> Solo Training Ground`
+        );
+      }
+    }
+  } else {
+    console.log(
+      "⚠️ Solo Training Ground mission not found, skipping event mappings"
+    );
+  }
+
   console.log("✅ Seed complete!");
 }
 

@@ -362,6 +362,17 @@ async function main() {
       description:
         "The ultimate training challenge. A master-crafted dummy with advanced combat routines.",
     },
+    {
+      name: "Sparring Partner",
+      type: "WARRIOR",
+      baseHealth: 120,
+      baseAttack: 12,
+      baseDefense: 8,
+      attackSpeed: 1.1,
+      rarity: "COMMON",
+      description:
+        "A skilled fighter who helps you practice combat techniques.",
+    },
   ];
 
   for (const template of monsterTemplates) {

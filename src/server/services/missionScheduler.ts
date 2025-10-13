@@ -222,7 +222,7 @@ export class MissionScheduler {
     await RewardService.applyMissionCompletionRewards(sessionId);
 
     // Notify party members
-    await this.notifyMissionSuccess(session);
+    await this.notifyMissionSuccess(session, "Mission completed successfully");
   }
 
   /**
@@ -239,20 +239,6 @@ export class MissionScheduler {
     // WebSocketService.broadcastToParty(session.partyId, {
     //   type: "mission_failed",
     //   reason: reason,
-    //   sessionId: session.id,
-    // });
-  }
-
-  /**
-   * Notify party members of mission success
-   */
-  private static async notifyMissionSuccess(session: any): Promise<void> {
-    // This would integrate with WebSocket to notify clients
-    console.log(`📢 Notifying party of mission success`);
-
-    // TODO: Implement WebSocket notification
-    // WebSocketService.broadcastToParty(session.partyId, {
-    //   type: "mission_completed",
     //   sessionId: session.id,
     // });
   }
@@ -463,7 +449,7 @@ export class MissionScheduler {
 
     // Apply final rewards
     const { RewardService } = await import("./rewardService");
-    await RewardService.applyMissionRewards(session.id);
+    await RewardService.applyMissionCompletionRewards(session.id);
 
     // Notify party members
     await this.notifyMissionSuccess(session, reason);

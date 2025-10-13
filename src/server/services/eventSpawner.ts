@@ -137,36 +137,56 @@ export class EventSpawner {
       return null;
     }
 
-    // Select random event type based on difficulty
-    const eventType = this.selectRandomEventType(session.mission.difficulty);
-
-    // Get available event templates for this type
-    const templates = await db.eventTemplate.findMany({
-      where: {
-        type: eventType,
-        difficulty: {
-          lte: session.mission.difficulty,
-        },
-      },
+    // Get allowed event templates for this mission
+    const allowedEventMappings = await db.missionEventTemplate.findMany({
+      where: { missionId: session.mission.id },
+      include: { eventTemplate: true },
     });
 
-    // Filter templates by environment from config
-    const validTemplates = templates.filter((template) => {
-      const config = template.config as any;
-      if (!config.environments) return true; // No restriction
-      return config.environments.includes(session.mission.environmentType);
-    });
-
-    if (validTemplates.length === 0) {
+    if (allowedEventMappings.length === 0) {
       console.warn(
-        `No valid event templates found for type ${eventType}, difficulty ${session.mission.difficulty}, and environment ${session.mission.environmentType}`
+        `No event templates configured for mission ${session.mission.id}`
       );
       return null;
     }
 
-    // Select random template from valid ones
-    const template =
-      validTemplates[Math.floor(Math.random() * validTemplates.length)];
+    // Filter by difficulty and environment
+    const validMappings = allowedEventMappings.filter((mapping) => {
+      const template = mapping.eventTemplate;
+      if (template.difficulty > session.mission.difficulty) return false;
+
+      const config = template.config as any;
+      if (
+        config.environments &&
+        !config.environments.includes(session.mission.environmentType)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (validMappings.length === 0) {
+      console.warn(
+        `No valid event templates for mission ${session.mission.id} at difficulty ${session.mission.difficulty}`
+      );
+      return null;
+    }
+
+    // Weighted random selection
+    const totalWeight = validMappings.reduce((sum, m) => sum + m.weight, 0);
+    let random = Math.random() * totalWeight;
+
+    let selectedMapping = validMappings[0];
+    for (const mapping of validMappings) {
+      random -= mapping.weight;
+      if (random <= 0) {
+        selectedMapping = mapping;
+        break;
+      }
+    }
+
+    const template = selectedMapping.eventTemplate;
 
     // Generate fresh event data
     const eventData = this.generateEventData(
@@ -255,60 +275,6 @@ export class EventSpawner {
     console.log(
       `✅ Completed event ${eventId} for session ${sessionId}, next spawn at ${nextSpawnTime.toISOString()}`
     );
-  }
-
-  /**
-   * Select a random event type based on mission difficulty
-   */
-  private static selectRandomEventType(difficulty: number): EventType {
-    const eventWeights = this.getEventWeights(difficulty);
-    const totalWeight = eventWeights.reduce((sum, weight) => sum + weight, 0);
-    const random = Math.random() * totalWeight;
-
-    let currentWeight = 0;
-    for (let i = 0; i < eventWeights.length; i++) {
-      currentWeight += eventWeights[i];
-      if (random <= currentWeight) {
-        return Object.values(EventType)[i] as EventType;
-      }
-    }
-
-    // Fallback to COMBAT
-    return EventType.COMBAT;
-  }
-
-  /**
-   * Get event type weights based on difficulty
-   */
-  private static getEventWeights(difficulty: number): number[] {
-    // Higher difficulty = more combat and boss events
-    const baseWeights = {
-      [EventType.COMBAT]: 30,
-      [EventType.TREASURE]: 20,
-      [EventType.TRAP]: 15,
-      [EventType.PUZZLE]: 10,
-      [EventType.CHOICE]: 10,
-      [EventType.REST]: 5,
-      [EventType.BOSS]: 0,
-      [EventType.BETRAYAL_OPPORTUNITY]: 5,
-      [EventType.NPC_ENCOUNTER]: 5,
-      [EventType.ENVIRONMENTAL_HAZARD]: 0,
-    };
-
-    // Adjust weights based on difficulty
-    if (difficulty >= 4) {
-      baseWeights[EventType.BOSS] = 15;
-      baseWeights[EventType.COMBAT] = 40;
-      baseWeights[EventType.ENVIRONMENTAL_HAZARD] = 10;
-    }
-
-    if (difficulty >= 5) {
-      baseWeights[EventType.BOSS] = 25;
-      baseWeights[EventType.COMBAT] = 35;
-      baseWeights[EventType.ENVIRONMENTAL_HAZARD] = 15;
-    }
-
-    return Object.values(baseWeights);
   }
 
   /**

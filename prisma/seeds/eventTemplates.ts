@@ -167,6 +167,27 @@ async function main() {
         defeat: { experience: 2, gold: 0 },
       },
     },
+    {
+      type: "COMBAT",
+      name: "Sparring Session",
+      description: "Practice your combat skills with a sparring partner.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["sparring_partner"],
+        monsterTemplateIds: ["cmgpdfwto0000umrgrjje4a08"], // Sparring Partner
+        minMonsters: 1,
+        maxMonsters: 2,
+        eliteChance: 0,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 10, gold: 20 },
+        defeat: { experience: 2, gold: 0 },
+      },
+    },
     // Boss event (spawns at end for CLEAR missions)
     {
       type: "BOSS",

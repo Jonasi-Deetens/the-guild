@@ -121,9 +121,10 @@ model Mission {
   bossTemplateId          String? // Boss to spawn (for CLEAR missions)
   maxMonstersPerEncounter Int     @default(4) // Max enemies per combat event
 
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
   dungeonSessions DungeonSession[]
+  allowedEvents   MissionEventTemplate[]
 }
 
 model Party {
@@ -386,16 +387,31 @@ model CharacterStatistics {
 }
 
 model EventTemplate {
-  id            String         @id @default(cuid())
-  type          EventType
-  name          String
-  description   String
-  difficulty    Int
-  minigameType  MinigameType?
-  config        Json
-  outcomes      Json
-  createdAt     DateTime       @default(now())
-  dungeonEvents DungeonEvent[]
+  id               String                 @id @default(cuid())
+  type             EventType
+  name             String
+  description      String
+  difficulty       Int
+  minigameType     MinigameType?
+  config           Json
+  outcomes         Json
+  createdAt        DateTime               @default(now())
+  dungeonEvents    DungeonEvent[]
+  missionTemplates MissionEventTemplate[]
+}
+
+model MissionEventTemplate {
+  id              String   @id @default(cuid())
+  missionId       String
+  eventTemplateId String
+  weight          Int      @default(1) // For weighted random selection
+  createdAt       DateTime @default(now())
+
+  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  eventTemplate EventTemplate @relation(fields: [eventTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([missionId, eventTemplateId])
+  @@index([missionId])
 }
 
 model DungeonEvent {
