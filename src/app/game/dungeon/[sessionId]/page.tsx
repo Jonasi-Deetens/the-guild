@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -9,11 +10,13 @@ import { MinigameContainer } from "@/components/game/minigames";
 import { PartyMembersSidebar } from "@/components/game/PartyMembersSidebar";
 import { MissionAnimation } from "@/components/game/MissionAnimation";
 import { EnvironmentBackground } from "@/components/game/EnvironmentBackground";
+import { LootDistributionModal } from "@/components/game/LootDistributionModal";
 import { useDungeonSession } from "@/contexts/DungeonSessionContext";
 import { api } from "@/trpc/react";
 
 export default function DungeonPage() {
   const router = useRouter();
+  const [showLootModal, setShowLootModal] = useState(false);
 
   const {
     session,
@@ -99,6 +102,19 @@ export default function DungeonPage() {
                   {session.mission.environmentType.replace("_", " ")}
                 </span>
               </div>
+              {/* Loot Distribution Button */}
+              {session.party && (
+                <div className="mt-3">
+                  <Button
+                    onClick={() => setShowLootModal(true)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    🎁 Loot Distribution
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -303,6 +319,17 @@ export default function DungeonPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Loot Distribution Modal */}
+      {session && (
+        <LootDistributionModal
+          isOpen={showLootModal}
+          onClose={() => setShowLootModal(false)}
+          sessionId={session.id}
+          characterId={session.party?.members[0]?.character.id || ""}
+          isMasterLooter={false} // TODO: Get from session data when available
+        />
       )}
     </div>
   );

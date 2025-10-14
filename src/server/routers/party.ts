@@ -6,6 +6,63 @@ import {
 } from "@/server/context";
 
 export const partyRouter = createTRPCRouter({
+  // Update party loot distribution settings
+  updateLootSettings: protectedProcedure
+    .input(
+      z.object({
+        partyId: z.string(),
+        lootDistributionType: z.enum(["AUTO", "NEED_GREED", "MASTER_LOOTER"]),
+        masterLooterId: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Verify user is the party leader
+      const party = await ctx.db.party.findUnique({
+        where: { id: input.partyId },
+        include: {
+          leader: true,
+        },
+      });
+
+      if (!party) {
+        throw new Error("Party not found");
+      }
+
+      if (party.leader.userId !== ctx.session.user.id) {
+        throw new Error("Only the party leader can update loot settings");
+      }
+
+      // Update party settings
+      const updatedParty = await ctx.db.party.update({
+        where: { id: input.partyId },
+        data: {
+          lootDistributionType: input.lootDistributionType,
+          masterLooterId: input.masterLooterId || null,
+        },
+        include: {
+          leader: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+            },
+          },
+          members: {
+            include: {
+              character: {
+                select: {
+                  id: true,
+                  name: true,
+                  level: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return updatedParty;
+    }),
   // Get all public parties (and user's private party if they're in one)
   getPublic: publicProcedure.query(async ({ ctx }) => {
     // Get user's character if they're logged in
@@ -434,5 +491,61 @@ export const partyRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  // Update party visibility (public/private)
+  updateVisibility: protectedProcedure
+    .input(
+      z.object({
+        partyId: z.string(),
+        isPublic: z.boolean(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      // Verify user is the party leader
+      const party = await ctx.db.party.findUnique({
+        where: { id: input.partyId },
+        include: {
+          leader: true,
+        },
+      });
+
+      if (!party) {
+        throw new Error("Party not found");
+      }
+
+      if (party.leader.userId !== ctx.session.user.id) {
+        throw new Error("Only the party leader can update party visibility");
+      }
+
+      // Update party visibility
+      const updatedParty = await ctx.db.party.update({
+        where: { id: input.partyId },
+        data: {
+          isPublic: input.isPublic,
+        },
+        include: {
+          leader: {
+            select: {
+              id: true,
+              name: true,
+              level: true,
+            },
+          },
+          members: {
+            include: {
+              character: {
+                select: {
+                  id: true,
+                  name: true,
+                  level: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      return updatedParty;
     }),
 });

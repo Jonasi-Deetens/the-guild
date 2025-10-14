@@ -65,7 +65,6 @@ export default function MissionsPage() {
   const startPartySessionMutation = api.dungeon.startPartySession.useMutation();
   const startSoloSessionMutation = api.dungeon.startSoloSession.useMutation();
   const leavePartyMutation = api.party.leave.useMutation();
-  const cleanupPartyMutation = api.party.cleanup.useMutation();
 
   // Loading state
   if (missionsLoading || characterLoading) {
@@ -95,35 +94,10 @@ export default function MissionsPage() {
       await leavePartyMutation.mutateAsync();
       // Refetch party data to update UI
       await refetchParty();
-      // Also invalidate the query cache to ensure fresh data
-      await api.useUtils().party.getMyCurrent.invalidate();
     } catch (error) {
       console.error("Failed to leave party:", error);
       setStartError(
         error instanceof Error ? error.message : "Failed to leave party"
-      );
-    }
-  };
-
-  const handleCleanupParty = async () => {
-    try {
-      const result = await cleanupPartyMutation.mutateAsync();
-      if (result.cleaned) {
-        setStartError(`Cleanup successful: ${result.message}`);
-        // Refetch party data to update UI
-        await refetchParty();
-        // Also invalidate the query cache to ensure fresh data
-        await api.useUtils().party.getMyCurrent.invalidate();
-        // Clear error after 3 seconds
-        setTimeout(() => setStartError(""), 3000);
-      } else {
-        setStartError("No cleanup needed - data is consistent");
-        setTimeout(() => setStartError(""), 3000);
-      }
-    } catch (error) {
-      console.error("Failed to cleanup party:", error);
-      setStartError(
-        error instanceof Error ? error.message : "Failed to cleanup party"
       );
     }
   };
@@ -652,17 +626,6 @@ export default function MissionsPage() {
                           {leavePartyMutation.isPending
                             ? "Leaving..."
                             : "Leave Party"}
-                        </Button>
-                        <Button
-                          onClick={handleCleanupParty}
-                          disabled={cleanupPartyMutation.isPending}
-                          variant="outline"
-                          size="sm"
-                          className="w-full text-yellow-400 border-yellow-400 hover:bg-yellow-400 hover:text-black"
-                        >
-                          {cleanupPartyMutation.isPending
-                            ? "Cleaning..."
-                            : "Cleanup Data"}
                         </Button>
                       </div>
                     </>

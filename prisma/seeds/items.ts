@@ -202,7 +202,7 @@ async function main() {
       console.log(`⊘ Item already exists: ${item.name}`);
     } else {
       await prisma.item.create({
-        data: item,
+        data: item as any,
       });
       console.log(`✅ Created item: ${item.name}`);
     }

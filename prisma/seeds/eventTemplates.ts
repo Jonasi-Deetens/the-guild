@@ -655,7 +655,9 @@ async function main() {
       const ids = [];
       if (goblinWarrior) ids.push(goblinWarrior.id);
       if (goblinArcher) ids.push(goblinArcher.id);
-      templateData.config.monsterTemplateIds = ids;
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
     } else if (template.name === "Skeleton Warriors") {
       const knight = await prisma.monsterTemplate.findFirst({
         where: { name: "Knight" },
@@ -670,12 +672,14 @@ async function main() {
       if (knight) ids.push(knight.id);
       if (banditScout) ids.push(banditScout.id);
       if (darkMage) ids.push(darkMage.id);
-      templateData.config.monsterTemplateIds = ids;
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
     } else if (template.name === "Bandit Raid") {
       const banditScout = await prisma.monsterTemplate.findFirst({
         where: { name: "Bandit Scout" },
       });
-      if (banditScout) {
+      if (banditScout && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [banditScout.id];
       }
     } else if (template.name === "Demon Encounter") {
@@ -692,33 +696,35 @@ async function main() {
       if (warlock) ids.push(warlock.id);
       if (rageDemon) ids.push(rageDemon.id);
       if (lichKing) ids.push(lichKing.id);
-      templateData.config.monsterTemplateIds = ids;
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
     } else if (template.name === "Sparring Session") {
       const sparringPartner = await prisma.monsterTemplate.findFirst({
         where: { name: "Sparring Partner" },
       });
-      if (sparringPartner) {
+      if (sparringPartner && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [sparringPartner.id];
       }
     } else if (template.name === "Master Training Dummy Challenge") {
       const masterDummy = await prisma.monsterTemplate.findFirst({
         where: { name: "Master Training Dummy" },
       });
-      if (masterDummy) {
+      if (masterDummy && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [masterDummy.id];
       }
     } else if (template.name === "Goblin Chief") {
       const orcWarlord = await prisma.monsterTemplate.findFirst({
         where: { name: "Orc Warlord" },
       });
-      if (orcWarlord) {
+      if (orcWarlord && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [orcWarlord.id];
       }
     } else if (template.name === "Dragon Lord") {
       const dragon = await prisma.monsterTemplate.findFirst({
         where: { name: "Dragon" },
       });
-      if (dragon) {
+      if (dragon && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [dragon.id];
       }
     }

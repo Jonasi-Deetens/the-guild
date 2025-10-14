@@ -4,6 +4,7 @@ import { missionRouter } from "./mission";
 import { partyRouter } from "./party";
 import { dungeonRouter } from "./dungeon";
 import { dungeonEventRouter } from "./dungeonEvent";
+import { lootDistributionRouter } from "./lootDistribution";
 import { tradingRouter } from "./trading";
 import { theftRouter } from "./theft";
 import { reputationRouter } from "./reputation";
@@ -16,6 +17,7 @@ export const appRouter = createTRPCRouter({
   party: partyRouter,
   dungeon: dungeonRouter,
   dungeonEvent: dungeonEventRouter,
+  lootDistribution: lootDistributionRouter,
   trading: tradingRouter,
   theft: theftRouter,
   reputation: reputationRouter,

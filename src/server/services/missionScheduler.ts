@@ -515,10 +515,44 @@ export class MissionScheduler {
   }
 
   /**
-   * Claim loot for all characters in the session
+   * Distribute loot for all characters in the session
    */
   private static async claimLootForSession(sessionId: string): Promise<void> {
-    console.log(`🎁 Claiming loot for session ${sessionId}`);
+    console.log(`🎁 Distributing loot for session ${sessionId}`);
+
+    try {
+      // Import the new loot distribution service
+      const { LootDistributionService } = await import(
+        "./lootDistributionService"
+      );
+
+      // Use the new loot distribution system
+      const result = await LootDistributionService.distributeLoot(sessionId);
+
+      if (result.success) {
+        console.log(`✅ Loot distribution completed: ${result.message}`);
+      } else {
+        console.error(`❌ Loot distribution failed: ${result.message}`);
+      }
+    } catch (error) {
+      console.error(
+        `❌ Failed to distribute loot for session ${sessionId}:`,
+        error
+      );
+
+      // Fallback to old system if new system fails
+      console.log(`🔄 Falling back to old loot claiming system...`);
+      await this.claimLootForSessionLegacy(sessionId);
+    }
+  }
+
+  /**
+   * Legacy loot claiming system (fallback)
+   */
+  private static async claimLootForSessionLegacy(
+    sessionId: string
+  ): Promise<void> {
+    console.log(`🎁 Using legacy loot claiming for session ${sessionId}`);
 
     // Get the session with party members
     const session = await db.dungeonSession.findUnique({
