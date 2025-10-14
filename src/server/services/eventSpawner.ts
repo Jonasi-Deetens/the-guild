@@ -605,9 +605,7 @@ export class EventSpawner {
         defense: monsterTemplate.baseDefense,
         attackInterval: monsterTemplate.attackSpeed,
         nextAttackTime:
-          Date.now() +
-          monsterTemplate.attackSpeed * 1000 +
-          Math.random() * 2000, // Add 0-2 seconds random offset
+          Date.now() + monsterTemplate.attackSpeed * 1000 + Math.random() * 500, // Add 0-0.5 seconds random offset (reduced to make speed differences more noticeable)
         abilities: monsterTemplate.abilities,
         description: monsterTemplate.description,
       };
@@ -621,6 +619,8 @@ export class EventSpawner {
         name: m.name,
         health: m.health,
         rarity: m.rarity,
+        attackSpeed: m.attackInterval,
+        nextAttackTime: new Date(m.nextAttackTime).toLocaleTimeString(),
       }))
     );
     return monsters;

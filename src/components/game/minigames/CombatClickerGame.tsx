@@ -102,6 +102,7 @@ export function CombatClickerGame({
   const gameTimerRef = useRef<NodeJS.Timeout | null>(null);
   const attackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scheduledAttacks = useRef<Set<string>>(new Set());
+  const attackTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   // Helper functions for monster images
   const getMonsterImagePath = (monsterName: string): string => {
@@ -399,6 +400,14 @@ export function CombatClickerGame({
           now >= monster.nextAttackTime &&
           !scheduledAttacks.current.has(monster.id)
         ) {
+          console.log(`🎯 Monster ${monster.name} attacking:`, {
+            attackSpeed: monster.attackInterval,
+            timeUntilAttack: monster.nextAttackTime - now,
+            nextAttackTime: new Date(
+              monster.nextAttackTime
+            ).toLocaleTimeString(),
+          });
+
           // Mark this monster as having a scheduled attack
           scheduledAttacks.current.add(monster.id);
 
@@ -406,14 +415,30 @@ export function CombatClickerGame({
           combatManager.current?.showBlockButton(monster.id);
 
           // Schedule the actual attack
-          setTimeout(() => {
+          const attackTimeout = setTimeout(() => {
+            // Check if monster is still alive before attacking
+            const currentMonster = gameState.monsters.find(
+              (m) => m.id === monster.id
+            );
+            if (!currentMonster || currentMonster.health <= 0) {
+              console.log(
+                `💀 Monster ${monster.name} died before attack could be performed, cancelling attack`
+              );
+              scheduledAttacks.current.delete(monster.id);
+              attackTimeouts.current.delete(monster.id);
+              return;
+            }
+
             performMonsterAttack(monster.id);
+            // Set next attack time AFTER the attack is performed
+            combatManager.current?.setNextAttackTime(monster.id);
             // Remove from scheduled attacks after attack is performed
             scheduledAttacks.current.delete(monster.id);
+            attackTimeouts.current.delete(monster.id);
           }, 2000);
 
-          // Set next attack time
-          combatManager.current?.setNextAttackTime(monster.id);
+          // Store the timeout ID so it can be cancelled if monster dies
+          attackTimeouts.current.set(monster.id, attackTimeout);
         }
       });
     };
@@ -424,10 +449,12 @@ export function CombatClickerGame({
       if (attackTimerRef.current) {
         clearInterval(attackTimerRef.current);
       }
-      // Clear scheduled attacks when component unmounts or effect changes
+      // Clear scheduled attacks and timeouts when component unmounts or effect changes
       scheduledAttacks.current.clear();
+      attackTimeouts.current.forEach((timeout) => clearTimeout(timeout));
+      attackTimeouts.current.clear();
     };
-  }, [gameState.gameActive, gameState.gameOver, gameState.monsters]);
+  }, [gameState.gameActive, gameState.gameOver]);
 
   // Update block timing states for visual feedback
   useEffect(() => {
@@ -490,8 +517,10 @@ export function CombatClickerGame({
       }
     }
 
-    // Hide block button (don't clear block status yet - it will be cleared when next block button appears)
-    combatManager.current.hideBlockButton(monsterId);
+    // Hide block button after a short delay to allow visual feedback to complete
+    setTimeout(() => {
+      combatManager.current?.hideBlockButton(monsterId);
+    }, 500); // 500ms delay to allow attack animation to complete
 
     // Update state
     const newState = combatManager.current.getState();
@@ -521,6 +550,27 @@ export function CombatClickerGame({
       // Complete the minigame with final result
       onComplete(finalResult);
     }
+  };
+
+  // Function to cancel scheduled attacks for dead monsters
+  const cancelDeadMonsterAttacks = () => {
+    const aliveMonsterIds = new Set(
+      gameState.monsters
+        .filter((monster) => monster.health > 0)
+        .map((monster) => monster.id)
+    );
+
+    // Cancel attacks for monsters that are no longer alive
+    attackTimeouts.current.forEach((timeout, monsterId) => {
+      if (!aliveMonsterIds.has(monsterId)) {
+        console.log(`💀 Cancelling attack for dead monster ${monsterId}`);
+        clearTimeout(timeout);
+        attackTimeouts.current.delete(monsterId);
+        scheduledAttacks.current.delete(monsterId);
+        // Also hide the block button for dead monsters
+        combatManager.current?.hideBlockButton(monsterId);
+      }
+    });
   };
 
   // Function to save combat state to backend (silently, no action logging)
@@ -616,6 +666,11 @@ export function CombatClickerGame({
       party: newState.party,
       damageLog: newState.damageLog,
     }));
+
+    // Cancel attacks for any monsters that died from this attack
+    setTimeout(() => {
+      cancelDeadMonsterAttacks();
+    }, 0); // Run after state update
 
     // Save combat state after each attack (silently, no action logging)
     saveCombatState();
@@ -745,6 +800,9 @@ export function CombatClickerGame({
       if (gameTimerRef.current) {
         clearInterval(gameTimerRef.current);
       }
+      // Clear all attack timeouts
+      attackTimeouts.current.forEach((timeout) => clearTimeout(timeout));
+      attackTimeouts.current.clear();
     };
   }, []);
 
@@ -919,37 +977,6 @@ export function CombatClickerGame({
                   }
                   style={{ cursor: monster.health > 0 ? "pointer" : "default" }}
                 >
-                  {/* Visual Block/Parry Indicator Above Monster */}
-                  {gameState.blockStates[monster.id]?.isVisible &&
-                    (() => {
-                      const timingState =
-                        combatManager.current?.getBlockTimingState(monster.id);
-
-                      return (
-                        <div className="absolute top-0 left-0 right-0 flex justify-center -mt-8 z-20">
-                          <div
-                            className={`px-4 py-2 rounded-lg font-bold text-sm shadow-lg ${
-                              timingState?.isInParryWindow
-                                ? "bg-yellow-400 text-yellow-900 animate-pulse"
-                                : timingState?.isInBlockWindow
-                                ? "bg-green-500 text-white"
-                                : "bg-blue-500 text-white"
-                            }`}
-                          >
-                            {timingState?.isInParryWindow
-                              ? "⚡ PARRY NOW!"
-                              : timingState?.isInBlockWindow
-                              ? "🛡️ BLOCK!"
-                              : "⚠️ INCOMING!"}
-                            <div className="text-xs">
-                              Right-click to{" "}
-                              {timingState?.isInParryWindow ? "parry" : "block"}
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })()}
-
                   {/* Fixed height container */}
                   <div className="h-48 flex">
                     {/* LEFT SIDE - Monster Image */}
@@ -1038,11 +1065,11 @@ export function CombatClickerGame({
                         </div>
                       </div>
 
-                      {/* Bottom - Block Indicator */}
-                      {monster.health > 0 && (
-                        <div className="h-10 flex items-end">
-                          {gameState.blockStates[monster.id]?.isVisible &&
-                            (() => {
+                      {/* Bottom - Compact Block/Parry Indicator */}
+                      {monster.health > 0 &&
+                        gameState.blockStates[monster.id]?.isVisible && (
+                          <div className="h-6 flex items-end">
+                            {(() => {
                               const timingState =
                                 combatManager.current?.getBlockTimingState(
                                   monster.id
@@ -1052,48 +1079,51 @@ export function CombatClickerGame({
 
                               return (
                                 <div className="w-full">
-                                  <div
-                                    className={`text-center py-1 px-1 rounded text-xs font-bold ${
-                                      isHolding
-                                        ? "bg-blue-700 text-blue-200"
-                                        : timingState?.isInParryWindow
-                                        ? "bg-yellow-400 text-yellow-900 animate-pulse"
-                                        : timingState?.isInBlockWindow
-                                        ? "bg-green-500 text-white"
-                                        : "bg-blue-500 text-white"
-                                    }`}
-                                  >
-                                    {isHolding
-                                      ? "🛡️ BLOCKING..."
-                                      : timingState?.isInParryWindow
-                                      ? "⚡ PARRY! (Right-click)"
-                                      : timingState?.isInBlockWindow
-                                      ? "🛡️ BLOCK! (Right-click)"
-                                      : "⚠️ INCOMING! (Right-click)"}
-                                  </div>
-
-                                  {/* Timing bar */}
-                                  <div className="w-full bg-gray-700 rounded-full h-1 mt-1">
+                                  {/* Compact indicator with timing bar */}
+                                  <div className="flex items-center space-x-2">
                                     <div
-                                      className={`h-1 rounded-full transition-all duration-100 ${
-                                        timingState?.isInParryWindow
-                                          ? "bg-yellow-400"
+                                      className={`px-2 py-1 rounded text-xs font-bold flex-1 ${
+                                        isHolding
+                                          ? "bg-blue-700 text-blue-200"
+                                          : timingState?.isInParryWindow
+                                          ? "bg-yellow-400 text-yellow-900 animate-pulse"
                                           : timingState?.isInBlockWindow
-                                          ? "bg-green-400"
-                                          : "bg-blue-400"
+                                          ? "bg-green-500 text-white"
+                                          : "bg-blue-500 text-white"
                                       }`}
-                                      style={{
-                                        width: `${
-                                          (timingState?.progress || 0) * 100
-                                        }%`,
-                                      }}
-                                    />
+                                    >
+                                      {isHolding
+                                        ? "🛡️ BLOCKING"
+                                        : timingState?.isInParryWindow
+                                        ? "⚡ PARRY"
+                                        : timingState?.isInBlockWindow
+                                        ? "🛡️ BLOCK"
+                                        : "⚠️ INCOMING"}
+                                    </div>
+
+                                    {/* Compact timing bar */}
+                                    <div className="w-16 bg-gray-700 rounded-full h-2">
+                                      <div
+                                        className={`h-2 rounded-full transition-all duration-100 ${
+                                          timingState?.isInParryWindow
+                                            ? "bg-yellow-400"
+                                            : timingState?.isInBlockWindow
+                                            ? "bg-green-400"
+                                            : "bg-blue-400"
+                                        }`}
+                                        style={{
+                                          width: `${
+                                            (timingState?.progress || 0) * 100
+                                          }%`,
+                                        }}
+                                      />
+                                    </div>
                                   </div>
                                 </div>
                               );
                             })()}
-                        </div>
-                      )}
+                          </div>
+                        )}
                     </div>
                   </div>
                 </div>

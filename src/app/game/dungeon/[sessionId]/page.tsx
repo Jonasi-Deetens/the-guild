@@ -147,18 +147,6 @@ export default function DungeonPage() {
                     >
                       {isLoading ? "Starting..." : "Start Mission"}
                     </Button>
-
-                    {/* Environment-specific decorations */}
-                    <div className="mt-6 text-3xl opacity-40">
-                      {session.mission.environmentType === "training_ground" &&
-                        "🥋"}
-                      {session.mission.environmentType === "dungeon_corridor" &&
-                        "🏰"}
-                      {session.mission.environmentType === "cave" && "🕳️"}
-                      {session.mission.environmentType === "forest" && "🌲"}
-                      {session.mission.environmentType === "crypt" && "⚰️"}
-                      {session.mission.environmentType === "ruins" && "🏛️"}
-                    </div>
                   </div>
                 </div>
               </div>

@@ -226,17 +226,6 @@ export function MissionAnimation({
               </div>
             )}
           </div>
-
-          {/* Environment-specific decorations */}
-          <div className="mt-6 text-3xl opacity-40">
-            {environmentType === "dungeon_corridor" && "⚔️"}
-            {environmentType === "forest_path" && "🍃"}
-            {environmentType === "cave_tunnel" && "💎"}
-            {environmentType === "mountain_path" && "🏔️"}
-            {environmentType === "desert_dunes" && "🌵"}
-            {environmentType === "training_ground" && "🥋"}
-            {environmentType === "inn" && "🕯️"}
-          </div>
         </div>
       </div>
     </div>

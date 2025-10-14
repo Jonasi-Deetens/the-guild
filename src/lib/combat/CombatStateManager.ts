@@ -452,7 +452,13 @@ export class CombatStateManager {
   setNextAttackTime(monsterId: string): void {
     const monster = this.monsters.find((m) => m.id === monsterId);
     if (monster) {
-      monster.nextAttackTime = Date.now() + monster.attackInterval * 1000; // Convert seconds to milliseconds
+      const nextAttackTime = Date.now() + monster.attackInterval * 1000; // Convert seconds to milliseconds
+      monster.nextAttackTime = nextAttackTime;
+      console.log(`⏰ Set next attack time for ${monster.name}:`, {
+        attackSpeed: monster.attackInterval,
+        nextAttackIn: monster.attackInterval * 1000,
+        nextAttackTime: new Date(nextAttackTime).toLocaleTimeString(),
+      });
     }
   }
 

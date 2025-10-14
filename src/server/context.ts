@@ -59,6 +59,7 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   return next({
     ctx: {
       session: { ...ctx.session, user: ctx.session.user },
+      db: ctx.db, // Pass through the database instance
     },
   });
 });
