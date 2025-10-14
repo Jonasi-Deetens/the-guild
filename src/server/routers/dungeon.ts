@@ -93,7 +93,10 @@ export const dungeonRouter = createTRPCRouter({
       // Check if all party members are ready
       const partyMembers = await ctx.db.partyMember.findMany({
         where: { partyId: character.partyId },
-        include: { character: true },
+        include: {
+          character: true,
+          npcCompanion: true,
+        },
       });
 
       const notReadyMembers = partyMembers.filter((member) => !member.isReady);
@@ -141,6 +144,7 @@ export const dungeonRouter = createTRPCRouter({
               members: {
                 include: {
                   character: true,
+                  npcCompanion: true,
                 },
               },
             },
@@ -379,6 +383,7 @@ export const dungeonRouter = createTRPCRouter({
             members: {
               include: {
                 character: true,
+                npcCompanion: true,
               },
             },
           },
