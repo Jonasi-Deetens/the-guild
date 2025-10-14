@@ -80,8 +80,13 @@ export class StatisticsService {
       case "REST":
         updates.restEvents = { increment: 1 };
         break;
-      case "BOSS":
-        updates.bossEvents = { increment: 1 };
+      case "COMBAT":
+        // Check if this is a boss fight
+        if (eventData?.isBossFight) {
+          updates.bossEvents = { increment: 1 };
+        } else {
+          updates.combatEvents = { increment: 1 };
+        }
         break;
     }
 

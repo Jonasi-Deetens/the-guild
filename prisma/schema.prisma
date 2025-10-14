@@ -218,22 +218,23 @@ model DungeonLoot {
 }
 
 model Item {
-  id          String        @id @default(cuid())
-  name        String
+  id          String             @id @default(cuid())
+  name        String             @unique
   description String
   type        ItemType
-  rarity      ItemRarity    @default(COMMON)
+  rarity      ItemRarity         @default(COMMON)
   value       Int
   attack      Int?
   defense     Int?
   healing     Int?
-  isTradeable Boolean       @default(true)
-  isStackable Boolean       @default(false)
-  maxStack    Int           @default(1)
-  createdAt   DateTime      @default(now())
+  isTradeable Boolean            @default(true)
+  isStackable Boolean            @default(false)
+  maxStack    Int                @default(1)
+  createdAt   DateTime           @default(now())
   dungeonLoot DungeonLoot[]
   inventory   Inventory[]
   Transaction Transaction[]
+  monsterLoot MonsterLootTable[]
 }
 
 model Inventory {
@@ -452,19 +453,35 @@ model DungeonPlayerAction {
 }
 
 model MonsterTemplate {
-  id          String        @id @default(cuid())
-  name        String        @unique
+  id          String             @id @default(cuid())
+  name        String             @unique
   type        MonsterType
   baseHealth  Int
   baseAttack  Int
   baseDefense Int
-  attackSpeed Float         @default(1.0)
-  canBeElite  Boolean       @default(true)
+  attackSpeed Float              @default(1.0)
+  canBeElite  Boolean            @default(true)
   abilities   Json?
-  rarity      MonsterRarity @default(COMMON)
+  rarity      MonsterRarity      @default(COMMON)
   description String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  lootTable   MonsterLootTable[]
+}
+
+model MonsterLootTable {
+  id                String          @id @default(cuid())
+  monsterTemplate   MonsterTemplate @relation(fields: [monsterTemplateId], references: [id], onDelete: Cascade)
+  monsterTemplateId String
+  item              Item            @relation(fields: [itemId], references: [id])
+  itemId            String
+  dropChance        Float // 0.0 to 1.0 (e.g., 0.15 = 15%)
+  minQuantity       Int             @default(1)
+  maxQuantity       Int             @default(1)
+  rarityModifier    Float           @default(1.0) // Multiplier for ELITE/RARE/BOSS
+  createdAt         DateTime        @default(now())
+
+  @@unique([monsterTemplateId, itemId])
 }
 
 enum PartyStatus {
@@ -557,7 +574,6 @@ enum EventType {
   PUZZLE
   CHOICE
   REST
-  BOSS
   BETRAYAL_OPPORTUNITY
   NPC_ENCOUNTER
   ENVIRONMENTAL_HAZARD

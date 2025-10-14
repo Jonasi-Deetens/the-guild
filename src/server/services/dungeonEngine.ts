@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 import { EventSpawner } from "./eventSpawner";
 import { RewardService } from "./rewardService";
 import { MissionScheduler } from "./missionScheduler";
-import { EventType, EventStatus } from "@prisma/client";
+import { CombatService } from "./combatService";
+import { EventType } from "@prisma/client";
 
 export interface DungeonAction {
   characterId: string;
@@ -186,8 +187,8 @@ export class DungeonEngine {
     const eventType = event.template?.type as EventType;
     const eventData = event.eventData as any;
 
-    // Check if this is a combat/boss event that needs completion logic
-    if (eventType === EventType.COMBAT || eventType === EventType.BOSS) {
+    // Check if this is a combat event that needs completion logic
+    if (eventType === EventType.COMBAT) {
       const session = await db.dungeonSession.findUnique({
         where: { id: event.sessionId },
         include: { party: { include: { members: true } } },
@@ -253,20 +254,17 @@ export class DungeonEngine {
   ): Promise<boolean> {
     console.log(`🔍 isCombatComplete - lastResult:`, lastResult);
 
-    // Check minigameResult from new combat system
-    if (lastResult?.minigameResult) {
-      const { victory, defeat } = lastResult.minigameResult;
-      if (victory === true || defeat === true) {
-        console.log(`✅ Combat complete via minigameResult:`, {
-          victory,
-          defeat,
-        });
-        return true;
-      }
-    }
+    const eventData = event.eventData as any;
+    const combatState = eventData.combatState;
 
-    // Legacy checks removed - only use new system
-    return false;
+    const completion = CombatService.checkCombatCompletion(
+      combatState,
+      lastResult
+    );
+
+    console.log(`✅ Combat completion status:`, completion);
+
+    return completion.isComplete;
   }
 
   /**
@@ -291,7 +289,8 @@ export class DungeonEngine {
 
     switch (eventType) {
       case EventType.COMBAT:
-        return await this.processCombatAction(
+        // Use CombatService for all combat events (including boss fights)
+        return await CombatService.processCombatAction(
           event,
           character,
           action,
@@ -338,14 +337,6 @@ export class DungeonEngine {
           actionData
         );
 
-      case EventType.BOSS:
-        return await this.processBossAction(
-          event,
-          character,
-          action,
-          actionData
-        );
-
       case EventType.ENVIRONMENTAL_HAZARD:
         return await this.processEnvironmentalHazardAction(
           event,
@@ -376,244 +367,6 @@ export class DungeonEngine {
           message: "Unknown event type",
         };
     }
-  }
-
-  /**
-   * Process combat action
-   */
-  private async processCombatAction(
-    event: any,
-    character: any,
-    action: string,
-    actionData: any
-  ): Promise<any> {
-    const eventData = event.eventData as any;
-
-    // Get or initialize combat state
-    let combatState = eventData.combatState || {
-      enemies: Array.from({ length: eventData.enemyCount || 1 }, (_, i) => ({
-        id: i,
-        health: 100,
-        maxHealth: 100,
-      })),
-      turnCount: 0,
-      playerDamageDealt: 0,
-      enemyDamageDealt: 0,
-    };
-
-    // Increment turn count
-    combatState.turnCount++;
-
-    const damage = this.calculateDamage(character, eventData.enemyLevel || 1);
-
-    if (
-      action === "attack" ||
-      action === "MINIGAME_COMPLETE" ||
-      action === "COMBAT_STATE_UPDATE"
-    ) {
-      let finalDamage = 0;
-      let isCritical = false;
-      let message = "";
-
-      if (action === "MINIGAME_COMPLETE" && actionData) {
-        // Process minigame result
-        const minigameResult = actionData.minigameResult || actionData;
-
-        if (minigameResult.victory) {
-          // Store full combat state after each action
-          const updatedCombatState = {
-            monsters: minigameResult.monsters || combatState.enemies,
-            turnCount: combatState.turnCount + 1,
-            playerDamageDealt:
-              combatState.playerDamageDealt + (minigameResult.damageDealt || 0),
-            enemyDamageDealt:
-              combatState.enemyDamageDealt + (minigameResult.damageTaken || 0),
-            monstersDefeated: minigameResult.monstersDefeated || 0,
-            partyHealthUpdates: minigameResult.partyHealthUpdates,
-          };
-
-          await db.dungeonEvent.update({
-            where: { id: event.id },
-            data: {
-              eventData: {
-                ...event.eventData,
-                combatState: updatedCombatState,
-              },
-            },
-          });
-
-          // Minigame completed with victory - return victory result immediately
-          return {
-            success: true,
-            message: "Victory! All enemies defeated!",
-            damage: minigameResult.damageDealt || 0,
-            isCritical: false,
-            victory: true,
-            combatState: updatedCombatState,
-            minigameResult: minigameResult, // Preserve original minigame result
-          };
-        } else {
-          // Store full combat state after each action
-          const updatedCombatState = {
-            monsters: minigameResult.monsters || combatState.enemies,
-            turnCount: combatState.turnCount + 1,
-            playerDamageDealt:
-              combatState.playerDamageDealt + (minigameResult.damageDealt || 0),
-            enemyDamageDealt:
-              combatState.enemyDamageDealt + (minigameResult.damageTaken || 0),
-            monstersDefeated: minigameResult.monstersDefeated || 0,
-            partyHealthUpdates: minigameResult.partyHealthUpdates,
-          };
-
-          await db.dungeonEvent.update({
-            where: { id: event.id },
-            data: {
-              eventData: {
-                ...event.eventData,
-                combatState: updatedCombatState,
-              },
-            },
-          });
-
-          // Apply damage to character (if any)
-          if (minigameResult.damageTaken) {
-            // damageTaken is a Record<string, number> with player IDs as keys
-            const characterDamage =
-              minigameResult.damageTaken[character.id] || 0;
-            if (characterDamage > 0) {
-              await RewardService.applyEventRewards(
-                event.sessionId,
-                event.id,
-                character.id,
-                {
-                  healthChange: -characterDamage,
-                }
-              );
-            }
-          }
-
-          return {
-            success: false,
-            message: "Defeat! You have been defeated in combat!",
-            damage: 0,
-            isCritical: false,
-            defeat: true,
-            combatState: updatedCombatState,
-            minigameResult: minigameResult, // Preserve original minigame result
-          };
-        }
-      } else if (action === "COMBAT_STATE_UPDATE" && actionData) {
-        // Handle combat state update from frontend (silent update, no action logging)
-        console.log("💾 [DungeonEngine] Processing silent combat state update");
-
-        const updatedCombatState = actionData.combatState;
-
-        // Save the updated combat state to the database silently
-        await db.dungeonEvent.update({
-          where: { id: event.id },
-          data: {
-            eventData: {
-              ...event.eventData,
-              combatState: updatedCombatState,
-            },
-          },
-        });
-
-        // Return success without creating action entry or changing event status
-        return {
-          success: true,
-          message: "Combat state updated silently",
-          damage: 0,
-          isCritical: false,
-          combatState: updatedCombatState,
-          silent: true, // Flag to indicate this shouldn't be logged as an action
-        };
-      } else {
-        // Direct attack action
-        isCritical = Math.random() < character.criticalChance;
-        finalDamage = isCritical ? damage * 2 : damage;
-        message = isCritical
-          ? `Critical hit! Dealt ${finalDamage} damage!`
-          : `Dealt ${finalDamage} damage!`;
-      }
-
-      // Find the first alive enemy to attack
-      const targetEnemy = combatState.enemies.find(
-        (enemy: any) => enemy.health > 0
-      );
-
-      if (targetEnemy) {
-        targetEnemy.health -= finalDamage;
-        combatState.playerDamageDealt += finalDamage;
-
-        console.log(
-          `🔍 Combat action - after damage: enemy ${targetEnemy.id} health=${targetEnemy.health}, finalDamage=${finalDamage}`
-        );
-
-        // Check if all enemies are defeated
-        const aliveEnemies = combatState.enemies.filter(
-          (enemy: any) => enemy.health > 0
-        );
-        if (aliveEnemies.length === 0) {
-          console.log(`✅ Combat action - VICTORY! All enemies defeated`);
-          return {
-            success: true,
-            message: message + " Victory!",
-            damage: finalDamage,
-            isCritical: isCritical,
-            victory: true,
-            combatState: combatState,
-          };
-        }
-      } else {
-        // No alive enemies found (shouldn't happen)
-        console.log(`⚠️ Combat action - No alive enemies found`);
-        return {
-          success: true,
-          message: "No enemies to attack!",
-          damage: 0,
-          isCritical: false,
-          combatState: combatState,
-        };
-      }
-
-      return {
-        success: true,
-        message: message,
-        damage: finalDamage,
-        isCritical: isCritical,
-        combatState: combatState,
-      };
-    } else if (action === "block") {
-      // Character blocks - reduce incoming damage
-      const enemyDamage = Math.floor(damage * 0.3); // Block reduces damage by 70%
-      combatState.enemyDamageDealt += enemyDamage;
-
-      return {
-        success: true,
-        message: `Blocked the attack! Took ${enemyDamage} damage.`,
-        blocked: true,
-        damage: enemyDamage,
-        combatState: combatState,
-      };
-    } else if (action === "flee") {
-      // Character flees
-      const fleeChance = 0.7; // 70% chance to flee
-      const success = Math.random() < fleeChance;
-
-      return {
-        success: success,
-        message: success ? "Successfully fled from combat!" : "Failed to flee!",
-        fled: success,
-        combatState: combatState,
-      };
-    }
-
-    return {
-      success: false,
-      message: "Invalid combat action",
-      combatState: combatState,
-    };
   }
 
   /**
@@ -946,39 +699,6 @@ export class DungeonEngine {
   }
 
   /**
-   * Process boss action
-   */
-  private async processBossAction(
-    event: any,
-    character: any,
-    action: string,
-    actionData: any
-  ): Promise<any> {
-    console.log(`🎯 Processing boss action:`, {
-      eventId: event.id,
-      action: action,
-      hasActionData: !!actionData,
-    });
-
-    // Boss actions are handled the same as combat actions
-    // This ensures minigame completion works properly
-    const result = await this.processCombatAction(
-      event,
-      character,
-      action,
-      actionData
-    );
-
-    console.log(`🎯 Boss action result:`, {
-      success: result.success,
-      victory: result.victory,
-      defeat: result.defeat,
-    });
-
-    return result;
-  }
-
-  /**
    * Process environmental hazard action
    */
   private async processEnvironmentalHazardAction(
@@ -1151,6 +871,9 @@ export class DungeonEngine {
     // Calculate final results based on all actions
     const results = await this.calculateEventResults(event);
 
+    console.log(`🔍 Final event results for ${eventId}:`, results);
+    console.log(`🔍 Generated loot in results:`, results.generatedLoot);
+
     // Update event with results
     await db.dungeonEvent.update({
       where: { id: eventId },
@@ -1171,7 +894,11 @@ export class DungeonEngine {
       results: results,
     });
 
-    if (event.template?.type === "BOSS" && results?.victory === true) {
+    if (
+      event.template?.type === "COMBAT" &&
+      (event.eventData as any)?.isBossFight &&
+      results?.victory === true
+    ) {
       console.log(`🎉 Boss defeated! Completing mission...`);
 
       // Get the session to complete the mission
@@ -1188,11 +915,8 @@ export class DungeonEngine {
       }
     }
 
-    // Check if this was a combat or boss defeat that should fail the mission
-    if (
-      (event.template?.type === "COMBAT" || event.template?.type === "BOSS") &&
-      results?.defeat === true
-    ) {
+    // Check if this was a combat defeat that should fail the mission
+    if (event.template?.type === "COMBAT" && results?.defeat === true) {
       console.log(
         `💀 Combat defeat detected, checking if mission should fail...`
       );
@@ -1268,13 +992,14 @@ export class DungeonEngine {
 
     // Aggregate results from all player actions
     const results: any = {
+      type: eventType?.toLowerCase(), // Use lowercase to match frontend expectations
       eventType: eventType,
       totalActions: actions.length,
       timestamp: new Date().toISOString(),
     };
 
-    // For combat/boss events, check if any action resulted in victory or defeat
-    if (eventType === "COMBAT" || eventType === "BOSS") {
+    // For combat events, check if any action resulted in victory or defeat
+    if (eventType === "COMBAT") {
       const lastAction = actions[actions.length - 1];
       console.log(`🔍 Last action for ${eventType} event:`, {
         actionType: lastAction?.actionType,
@@ -1292,6 +1017,16 @@ export class DungeonEngine {
         results.victory = lastAction.result.victory === true;
         results.defeat = lastAction.result.defeat === true;
         results.success = lastAction.result.success === true;
+        // Include generated loot from the result
+        if (lastAction.result.generatedLoot) {
+          results.generatedLoot = lastAction.result.generatedLoot;
+          console.log(
+            `🎁 Added generated loot to event results:`,
+            lastAction.result.generatedLoot
+          );
+        } else {
+          console.log(`⚠️ No generated loot found in last action result`);
+        }
       }
 
       console.log(`🔍 Combat/Boss event results:`, {
@@ -1300,6 +1035,7 @@ export class DungeonEngine {
         success: results.success,
         hasResult: !!lastAction?.result,
         hasMinigameResult: !!lastAction?.minigameResult,
+        generatedLoot: results.generatedLoot,
       });
     }
 

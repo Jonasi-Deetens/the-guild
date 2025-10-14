@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { EventSpawner } from "./eventSpawner";
 import { RewardService } from "./rewardService";
+import { LootService } from "./lootService";
 
 export class MissionScheduler {
   private static isRunning = false;
@@ -73,6 +74,21 @@ export class MissionScheduler {
    * Process a single mission
    */
   private static async processMission(session: any): Promise<void> {
+    // Double-check that the session is still ACTIVE (avoid race conditions)
+    const currentSession = await db.dungeonSession.findUnique({
+      where: { id: session.id },
+      select: { status: true },
+    });
+
+    if (!currentSession || currentSession.status !== "ACTIVE") {
+      console.log(
+        `⏭️ Skipping mission ${session.id} - status is ${
+          currentSession?.status || "not found"
+        }`
+      );
+      return;
+    }
+
     const now = new Date();
 
     // Check mission type specific logic
@@ -374,6 +390,21 @@ export class MissionScheduler {
    * Handle CLEAR mission timeout (spawn boss instead of failing)
    */
   private static async handleClearMissionTimeout(session: any): Promise<void> {
+    // Double-check that the session is still ACTIVE
+    const currentSession = await db.dungeonSession.findUnique({
+      where: { id: session.id },
+      select: { status: true },
+    });
+
+    if (!currentSession || currentSession.status !== "ACTIVE") {
+      console.log(
+        `⏭️ Skipping boss spawn for mission ${session.id} - status is ${
+          currentSession?.status || "not found"
+        }`
+      );
+      return;
+    }
+
     console.log(`⏰ CLEAR Mission ${session.id} timer expired - spawning boss`);
 
     // Check if boss already exists (any status)
@@ -381,12 +412,19 @@ export class MissionScheduler {
       where: {
         sessionId: session.id,
         template: {
-          type: "BOSS",
+          type: "COMBAT",
         },
       },
     });
 
-    if (existingBossEvent) {
+    // Check if the found event is a boss fight
+    const isBossEvent =
+      existingBossEvent &&
+      existingBossEvent.eventData &&
+      typeof existingBossEvent.eventData === "object" &&
+      (existingBossEvent.eventData as any).isBossFight === true;
+
+    if (isBossEvent) {
       console.log(`⏰ Boss event already exists for mission ${session.id}`);
       return;
     }
@@ -394,9 +432,10 @@ export class MissionScheduler {
     // Spawn boss if configured
     if (session.mission.bossTemplateId) {
       const { EventSpawner } = await import("./eventSpawner");
-      await EventSpawner.spawnBossEvent(
+      await EventSpawner.spawnCombatEvent(
         session.id,
-        session.mission.bossTemplateId
+        session.mission.bossTemplateId,
+        true // isBossFight = true
       );
     } else {
       // No boss - complete mission
@@ -468,8 +507,85 @@ export class MissionScheduler {
     const { RewardService } = await import("./rewardService");
     await RewardService.applyMissionCompletionRewards(session.id);
 
+    // Claim loot for all characters in the session
+    await this.claimLootForSession(session.id);
+
     // Notify party members
     await this.notifyMissionSuccess(session, reason);
+  }
+
+  /**
+   * Claim loot for all characters in the session
+   */
+  private static async claimLootForSession(sessionId: string): Promise<void> {
+    console.log(`🎁 Claiming loot for session ${sessionId}`);
+
+    // Get the session with party members
+    const session = await db.dungeonSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        party: {
+          include: {
+            members: {
+              include: {
+                character: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!session) {
+      console.error(`❌ Session ${sessionId} not found for loot claiming`);
+      return;
+    }
+
+    if (session.party) {
+      // Party mission - claim loot for each member
+      for (const member of session.party.members) {
+        try {
+          const claimedLoot = await LootService.claimLoot(
+            sessionId,
+            member.character.id
+          );
+          console.log(
+            `✅ Claimed ${claimedLoot.length} loot items for character ${member.character.name}`
+          );
+        } catch (error) {
+          console.error(
+            `❌ Failed to claim loot for character ${member.character.id}:`,
+            error
+          );
+        }
+      }
+    } else {
+      // Solo mission - get the character from the session
+      const character = await db.character.findFirst({
+        where: {
+          user: {
+            id: session.userId,
+          },
+        },
+      });
+
+      if (character) {
+        try {
+          const claimedLoot = await LootService.claimLoot(
+            sessionId,
+            character.id
+          );
+          console.log(
+            `✅ Claimed ${claimedLoot.length} loot items for solo character ${character.name}`
+          );
+        } catch (error) {
+          console.error(
+            `❌ Failed to claim loot for solo character ${character.id}:`,
+            error
+          );
+        }
+      }
+    }
   }
 
   /**

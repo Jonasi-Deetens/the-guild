@@ -59,8 +59,7 @@ export function TimelineProgressBar({
         );
       case "CHOICE":
         return <Users className="w-4 h-4" />;
-      case "BOSS":
-        return <Skull className="w-4 h-4" />;
+      // BOSS events are now handled as COMBAT events
       case "NPC_ENCOUNTER":
         return <Eye className="w-4 h-4" />;
       case "ENVIRONMENTAL_HAZARD":
@@ -97,8 +96,7 @@ export function TimelineProgressBar({
         return "text-amber-400";
       case "CHOICE":
         return "text-blue-400";
-      case "BOSS":
-        return "text-red-500";
+      // BOSS events are now handled as COMBAT events
       case "NPC_ENCOUNTER":
         return "text-green-400";
       case "ENVIRONMENTAL_HAZARD":

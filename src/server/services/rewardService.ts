@@ -211,9 +211,15 @@ export class RewardService {
         rewards.experience = 5;
         break;
 
-      case EventType.BOSS:
-        rewards.gold = Math.floor((eventData.bossLevel || 1) * 50);
-        rewards.experience = Math.floor((eventData.bossLevel || 1) * 100);
+      case EventType.COMBAT:
+        // Check if this is a boss fight
+        if (eventData.isBossFight) {
+          rewards.gold = Math.floor((eventData.bossLevel || 1) * 50);
+          rewards.experience = Math.floor((eventData.bossLevel || 1) * 100);
+        } else {
+          rewards.gold = Math.floor((eventData.difficulty || 1) * 10);
+          rewards.experience = Math.floor((eventData.difficulty || 1) * 20);
+        }
 
         if (performance.victory) {
           rewards.items = [

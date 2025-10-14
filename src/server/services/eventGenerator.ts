@@ -8,7 +8,6 @@ export type EventType =
   | "PUZZLE"
   | "CHOICE"
   | "REST"
-  | "BOSS"
   | "BETRAYAL_OPPORTUNITY"
   | "NPC_ENCOUNTER"
   | "ENVIRONMENTAL_HAZARD";
@@ -86,8 +85,8 @@ export class EventGenerator {
     // First event: always combat (introduction)
     if (index === 0) return "COMBAT";
 
-    // Last event: always boss
-    if (index === totalEvents - 1) return "BOSS";
+    // Last event: always boss (now handled as COMBAT with isBossFight flag)
+    if (index === totalEvents - 1) return "COMBAT";
 
     // Middle events: weighted random
     const roll = this.rng();
@@ -192,8 +191,9 @@ export class EventGenerator {
         return this.generatePuzzleData(difficulty);
       case "CHOICE":
         return this.generateChoiceData(difficulty);
-      case "BOSS":
-        return this.generateBossData(difficulty);
+      case "COMBAT":
+        // This will be handled by the event spawner to determine if it's a boss fight
+        return this.generateCombatData(difficulty);
       case "NPC_ENCOUNTER":
         return this.generateNpcData(difficulty);
       case "ENVIRONMENTAL_HAZARD":

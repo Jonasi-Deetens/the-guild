@@ -23,7 +23,7 @@ async function main() {
       environmentType: "training_ground",
       missionType: "CLEAR",
       failCondition: "DEATH_ONLY",
-      bossTemplateId: "cmgo9fl1u0006um7kqz00sxui", // Master Dummy Challenge boss event
+      bossTemplateId: null, // Will be set dynamically after event templates are created
       maxMonstersPerEncounter: 3,
       isActive: true,
     },
@@ -248,6 +248,9 @@ async function main() {
 
   console.log("✅ Seed complete!");
 }
+
+// Import and run monster loot seed
+import "./seeds/monsterLoot";
 
 main()
   .catch((e) => {

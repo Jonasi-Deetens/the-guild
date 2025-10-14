@@ -74,6 +74,7 @@ export function CombatClickerGame({
     victory: boolean;
     timeStarted: number;
     timeTaken: number;
+    completionHandled: boolean;
   }>({
     monsters: [],
     party: [],
@@ -84,6 +85,7 @@ export function CombatClickerGame({
     victory: false,
     timeStarted: 0,
     timeTaken: 0,
+    completionHandled: false,
   });
 
   // State for click animations
@@ -547,8 +549,10 @@ export function CombatClickerGame({
       // Get final combat result
       const finalResult = combatManager.current.getCombatResult();
 
-      // Complete the minigame with final result
-      onComplete(finalResult);
+      // Don't complete the minigame here - let the useEffect handle it with monster data
+      console.log(
+        "🎮 [CombatClickerGame] Combat ended, waiting for useEffect to complete with monster data"
+      );
     }
   };
 
@@ -767,10 +771,18 @@ export function CombatClickerGame({
 
   // Complete game when over
   useEffect(() => {
-    if (gameState.gameOver && combatManager.current) {
+    if (
+      gameState.gameOver &&
+      !gameState.completionHandled &&
+      combatManager.current
+    ) {
       console.log(
         "🎮 [CombatClickerGame] Game over detected, getting combat result"
       );
+
+      // Mark as handled to prevent double calls
+      setGameState((prev) => ({ ...prev, completionHandled: true }));
+
       const result = combatManager.current.getCombatResult();
       console.log("🎮 [CombatClickerGame] Final combat result:", result);
 
@@ -786,10 +798,40 @@ export function CombatClickerGame({
           totalClicks: result.totalClicks,
           damageDealt: result.damageDealt,
         });
-        onComplete(result);
+
+        // Include monster data for loot generation
+        const resultWithMonsters = {
+          ...result,
+          monsters: gameState.monsters.map((m) => ({
+            id: m.id,
+            name: m.name,
+            health: m.health,
+            maxHealth: m.maxHealth,
+            templateId: m.templateId,
+            rarity: m.rarity,
+          })),
+        };
+
+        console.log("🎮 [CombatClickerGame] Result with monsters:", {
+          monstersCount: resultWithMonsters.monsters.length,
+          monsters: resultWithMonsters.monsters.map((m) => ({
+            id: m.id,
+            name: m.name,
+            health: m.health,
+            templateId: m.templateId,
+            rarity: m.rarity,
+          })),
+        });
+
+        onComplete(resultWithMonsters);
       }, 2000); // Show game over screen for 2 seconds before completing
     }
-  }, [gameState.gameOver, onComplete]);
+  }, [
+    gameState.gameOver,
+    gameState.completionHandled,
+    gameState.monsters,
+    onComplete,
+  ]);
 
   // Cleanup timers
   useEffect(() => {

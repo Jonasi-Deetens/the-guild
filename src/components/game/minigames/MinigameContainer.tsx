@@ -124,7 +124,6 @@ export function getMinigameTypeForEvent(event: {
   // Fallback to default mapping based on event type
   switch (event.type) {
     case "COMBAT":
-    case "BOSS":
       return "COMBAT_CLICKER";
     case "TRAP":
       return "QUICK_TIME";

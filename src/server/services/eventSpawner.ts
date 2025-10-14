@@ -268,7 +268,7 @@ export class EventSpawner {
     // Immediately activate the event since we're spawning it now
     await this.activatePendingEvent(sessionId, event.id);
 
-    console.log(`🎲 Spawned ${eventType} event for session ${sessionId}`);
+    console.log(`🎲 Spawned ${template.type} event for session ${sessionId}`);
     return event.id;
   }
 
@@ -385,7 +385,7 @@ export class EventSpawner {
           healingAmount: 20 + difficulty * 5,
         };
 
-      case EventType.BOSS:
+      case EventType.COMBAT:
         return {
           ...baseData,
           bossLevel: difficulty * 3,
@@ -410,7 +410,6 @@ export class EventSpawner {
   static shouldPauseTimer(eventType: EventType): boolean {
     const pauseEvents = [
       EventType.COMBAT,
-      EventType.BOSS,
       EventType.PUZZLE,
       EventType.TRAP,
       EventType.ENVIRONMENTAL_HAZARD,
@@ -467,22 +466,24 @@ export class EventSpawner {
   }
 
   /**
-   * Spawn a boss event (for CLEAR missions when timer expires)
+   * Spawn a combat event (for CLEAR missions when timer expires, or regular combat)
    */
-  static async spawnBossEvent(
+  static async spawnCombatEvent(
     sessionId: string,
-    bossTemplateId: string
+    combatTemplateId: string,
+    isBossFight: boolean = false
   ): Promise<string> {
     const template = await db.eventTemplate.findUnique({
-      where: { id: bossTemplateId },
+      where: { id: combatTemplateId },
     });
 
-    if (!template) throw new Error("Boss template not found");
+    if (!template) throw new Error("Combat template not found");
 
-    console.log(`🎯 Spawning boss event with template:`, {
+    console.log(`🎯 Spawning combat event with template:`, {
       id: template.id,
       type: template.type,
       name: template.name,
+      isBossFight,
     });
 
     const session = await db.dungeonSession.findUnique({
@@ -500,12 +501,17 @@ export class EventSpawner {
       },
     });
 
-    // Create boss event
+    // Create combat event
     const eventData = this.generateEventData(
       template,
       session.mission.difficulty,
       session.mission
     );
+
+    // Add isBossFight flag to eventData
+    if (isBossFight) {
+      eventData.isBossFight = true;
+    }
 
     // Generate monsters for boss event immediately
     const monsters = await this.generateMonstersForEvent(template);
@@ -540,10 +546,11 @@ export class EventSpawner {
       data: { currentEventId: event.id },
     });
 
-    console.log(`🎯 Boss event created:`, {
+    console.log(`🎯 Combat event created:`, {
       eventId: event.id,
       templateType: template.type,
       status: event.status,
+      isBossFight,
     });
 
     return event.id;

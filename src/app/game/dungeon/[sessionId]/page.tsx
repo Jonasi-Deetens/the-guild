@@ -10,6 +10,7 @@ import { PartyMembersSidebar } from "@/components/game/PartyMembersSidebar";
 import { MissionAnimation } from "@/components/game/MissionAnimation";
 import { EnvironmentBackground } from "@/components/game/EnvironmentBackground";
 import { useDungeonSession } from "@/contexts/DungeonSessionContext";
+import { api } from "@/trpc/react";
 
 export default function DungeonPage() {
   const router = useRouter();
@@ -30,6 +31,12 @@ export default function DungeonPage() {
     submitAction,
     sendChatMessage,
   } = useDungeonSession();
+
+  // Get session loot for completion modal
+  const { data: sessionLoot } = api.dungeon.getSessionLoot.useQuery(
+    { sessionId: session?.id || "" },
+    { enabled: !!session?.id && showCompletion }
+  );
 
   const handleMinigameComplete = (result: unknown) => {
     setShowMinigame(false);
@@ -228,7 +235,7 @@ export default function DungeonPage() {
                 <h3 className="text-lg font-semibold text-white mb-3">
                   Rewards Earned
                 </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Experience:</span>
                     <span className="text-yellow-400 font-semibold">
@@ -242,6 +249,45 @@ export default function DungeonPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Loot Display */}
+                {sessionLoot && sessionLoot.length > 0 && (
+                  <div className="border-t border-gray-700 pt-4">
+                    <h4 className="text-md font-semibold text-blue-400 mb-3">
+                      Items Obtained
+                    </h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {sessionLoot.map((loot: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">
+                              {loot.itemName} x{loot.quantity}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${
+                                loot.rarity === "LEGENDARY"
+                                  ? "bg-purple-600 text-purple-100"
+                                  : loot.rarity === "RARE"
+                                  ? "bg-blue-600 text-blue-100"
+                                  : loot.rarity === "UNCOMMON"
+                                  ? "bg-green-600 text-green-100"
+                                  : "bg-gray-600 text-gray-100"
+                              }`}
+                            >
+                              {loot.rarity}
+                            </span>
+                          </div>
+                          <span className="text-gray-400 text-xs">
+                            {loot.value * loot.quantity} gold value
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 

@@ -178,12 +178,34 @@ export function DungeonSessionProvider({
 
   const currentEvent = useMemo(() => {
     if (!session) return null;
-    return (
-      session.events.find(
-        (event) =>
-          event.id === session.currentEventId && event.status === "ACTIVE"
-      ) || null
+
+    console.log("🔍 [DungeonSessionContext] Finding current event:", {
+      currentEventId: session.currentEventId,
+      eventsCount: session.events.length,
+      events: session.events.map((e) => ({
+        id: e.id,
+        status: e.status,
+        type: e.template?.type,
+      })),
+    });
+
+    const found = session.events.find(
+      (event) =>
+        event.id === session.currentEventId && event.status === "ACTIVE"
     );
+
+    console.log(
+      "🔍 [DungeonSessionContext] Current event found:",
+      found
+        ? {
+            id: found.id,
+            status: found.status,
+            type: found.template?.type,
+          }
+        : null
+    );
+
+    return found || null;
   }, [session]);
 
   const hasPlayerSubmittedAction = useMemo(() => {
