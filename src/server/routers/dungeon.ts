@@ -6,6 +6,7 @@ import {
 } from "@/server/context";
 import { DungeonEngine } from "@/server/services/dungeonEngine";
 import { MissionScheduler } from "@/server/services/missionScheduler";
+import { LootService } from "@/server/services/lootService";
 
 const dungeonEngine = new DungeonEngine();
 
@@ -417,5 +418,44 @@ export const dungeonRouter = createTRPCRouter({
       });
 
       return { success: true };
+    }),
+
+  // Get session loot
+  getSessionLoot: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Get all loot for the session
+      const sessionLoot = await LootService.getSessionLoot(input.sessionId);
+
+      return sessionLoot;
+    }),
+
+  // Claim loot for current character
+  claimLoot: protectedProcedure
+    .input(z.object({ sessionId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Claim loot for the character
+      const claimedLoot = await LootService.claimLoot(
+        input.sessionId,
+        character.id
+      );
+
+      return claimedLoot;
     }),
 });

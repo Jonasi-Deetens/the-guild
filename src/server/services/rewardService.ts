@@ -128,7 +128,6 @@ export class RewardService {
         },
       });
     });
-
   }
 
   /**
@@ -212,9 +211,15 @@ export class RewardService {
         rewards.experience = 5;
         break;
 
-      case EventType.BOSS:
-        rewards.gold = Math.floor((eventData.bossLevel || 1) * 50);
-        rewards.experience = Math.floor((eventData.bossLevel || 1) * 100);
+      case EventType.COMBAT:
+        // Check if this is a boss fight
+        if (eventData.isBossFight) {
+          rewards.gold = Math.floor((eventData.bossLevel || 1) * 50);
+          rewards.experience = Math.floor((eventData.bossLevel || 1) * 100);
+        } else {
+          rewards.gold = Math.floor((eventData.difficulty || 1) * 10);
+          rewards.experience = Math.floor((eventData.difficulty || 1) * 20);
+        }
 
         if (performance.victory) {
           rewards.items = [
@@ -310,16 +315,41 @@ export class RewardService {
       return;
     }
 
-    const partyMembers = session.party?.members || [];
+    // Handle party missions
+    if (session.party) {
+      const partyMembers = session.party.members;
 
-    // Apply base mission rewards to all party members
-    for (const member of partyMembers) {
-      if (member.character.currentHealth > 0) {
-        // Only alive members get rewards
+      // Apply base mission rewards to all party members
+      for (const member of partyMembers) {
+        if (member.character.currentHealth > 0) {
+          // Only alive members get rewards
+          await this.applyEventRewards(
+            sessionId,
+            "mission_completion",
+            member.character.id,
+            {
+              gold: session.mission.baseReward,
+              experience: session.mission.experienceReward,
+            }
+          );
+        }
+      }
+    } else {
+      // Handle solo missions - find the character from recent player actions
+      const recentAction = await db.dungeonPlayerAction.findFirst({
+        where: {
+          event: { sessionId: sessionId },
+        },
+        include: { character: true },
+        orderBy: { submittedAt: "desc" },
+      });
+
+      if (recentAction?.character && recentAction.character.currentHealth > 0) {
+        // Only alive characters get rewards
         await this.applyEventRewards(
           sessionId,
           "mission_completion",
-          member.character.id,
+          recentAction.character.id,
           {
             gold: session.mission.baseReward,
             experience: session.mission.experienceReward,

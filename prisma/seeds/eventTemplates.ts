@@ -20,11 +20,8 @@ async function main() {
         enemyTypes: ["goblin"],
         minEnemies: 2,
         maxEnemies: 4,
-        // New monster template system
-        monsterTemplateIds: [
-          "cmglkno020000umrsi8917116",
-          "cmglkno0p0004umrsgqn21ds9",
-        ], // Goblin Warrior, Goblin Archer
+        // New monster template system - will be populated dynamically
+        monsterTemplateIds: [], // Goblin Warrior, Goblin Archer
         minMonsters: 2,
         maxMonsters: 4,
         eliteChance: 0.2, // 20% chance for elite
@@ -49,12 +46,8 @@ async function main() {
         enemyTypes: ["skeleton"],
         minEnemies: 3,
         maxEnemies: 5,
-        // New monster template system
-        monsterTemplateIds: [
-          "cmglkno0e0002umrsdos6vngr",
-          "cmglkno0u0005umrsplb47dhx",
-          "cmglkno180008umrswssz3ruo",
-        ], // Knight, Bandit Scout, Dark Mage
+        // New monster template system - will be populated dynamically
+        monsterTemplateIds: [], // Knight, Bandit Scout, Dark Mage
         minMonsters: 3,
         maxMonsters: 5,
         eliteChance: 0.25, // 25% chance for elite
@@ -79,7 +72,7 @@ async function main() {
         minEnemies: 2,
         maxEnemies: 4,
         // New monster template system
-        monsterTemplateIds: ["cmglkno0u0005umrsplb47dhx"], // Bandit Scout
+        monsterTemplateIds: [], // Bandit Scout - will be populated dynamically
         minMonsters: 2,
         maxMonsters: 4,
         eliteChance: 0.15, // 15% chance for elite bandits
@@ -104,12 +97,8 @@ async function main() {
         enemyTypes: ["demon"],
         minEnemies: 1,
         maxEnemies: 2,
-        // New monster template system
-        monsterTemplateIds: [
-          "cmglkno1m000bumrsbt4ytwz3", // Warlock
-          "cmglkno2t000kumrszk2ec0bn", // Rage Demon
-          "cmglkno31000mumrsiu9nxqd4", // Lich King
-        ],
+        // New monster template system - will be populated dynamically
+        monsterTemplateIds: [], // Warlock, Rage Demon, Lich King
         minMonsters: 1,
         maxMonsters: 2,
         eliteChance: 0.4, // 40% chance for elite demons
@@ -119,6 +108,97 @@ async function main() {
         victory: { experience: 100, gold: 200 },
         defeat: { experience: 20, gold: 0 },
         flee: { experience: 30, gold: 0 },
+      },
+    },
+    // Training Ground Combat Events
+    {
+      type: "COMBAT",
+      name: "Dummy Practice",
+      description: "Practice your combat skills on training dummies.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["training_dummy"],
+        monsterTemplateIds: ["cmgo9dozm000oumwoxptie3rm"], // Training Dummy
+        minMonsters: 1,
+        maxMonsters: 2,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 5, gold: 10 },
+        defeat: { experience: 1, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Advanced Practice",
+      description: "Face multiple training dummies at once.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["training_dummy", "advanced_training_dummy"],
+        monsterTemplateIds: [
+          "cmgo9dozm000oumwoxptie3rm",
+          "cmgo9dozs000pumwom5ipal48",
+        ], // Training Dummy, Advanced Training Dummy
+        minMonsters: 2,
+        maxMonsters: 3,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 8, gold: 15 },
+        defeat: { experience: 2, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Sparring Session",
+      description: "Practice your combat skills with a sparring partner.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["training_ground"],
+        enemyTypes: ["sparring_partner"],
+        monsterTemplateIds: [], // Sparring Partner - will be populated dynamically
+        minMonsters: 1,
+        maxMonsters: 2,
+        eliteChance: 0,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 10, gold: 20 },
+        defeat: { experience: 2, gold: 0 },
+      },
+    },
+    // Boss event (spawns at end for CLEAR missions)
+    {
+      type: "COMBAT",
+      name: "Master Dummy Challenge",
+      description:
+        "Face the ultimate training challenge - the Master Training Dummy!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 180,
+        environments: ["training_ground"],
+        enemyTypes: ["master_training_dummy"],
+        monsterTemplateIds: ["cmgo9dozx000qumwojwn8r0nk"], // Master Training Dummy
+        isBossFight: true,
+        minMonsters: 1,
+        maxMonsters: 1,
+        eliteChance: 0,
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 15, gold: 50 },
+        defeat: { experience: 3, gold: 0 },
       },
     },
   ];
@@ -333,7 +413,32 @@ async function main() {
   // Boss Event Templates
   const bossTemplates = [
     {
-      type: "BOSS",
+      type: "COMBAT",
+      name: "Master Training Dummy Challenge",
+      description:
+        "The ultimate training challenge awaits! The Master Training Dummy stands ready to test your combat skills.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 180,
+        bossType: "master_dummy",
+        phases: 1,
+        specialAbilities: ["counter_attack"],
+        isBossFight: true,
+        // New monster template system - will be linked by name
+        monsterTemplateIds: [], // Will be populated dynamically
+        minMonsters: 1,
+        maxMonsters: 1,
+        eliteChance: 0, // Boss is already elite
+        specialAbilityChance: 1.0, // Boss always has special abilities
+      },
+      outcomes: {
+        victory: { experience: 50, gold: 100, items: ["training_certificate"] },
+        defeat: { experience: 10, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
       name: "Goblin Chief",
       description:
         "The goblin chief stands before you, wielding a crude but deadly weapon.",
@@ -344,8 +449,9 @@ async function main() {
         bossType: "goblin_chief",
         phases: 2,
         specialAbilities: ["charge", "summon"],
+        isBossFight: true,
         // New monster template system
-        monsterTemplateIds: ["cmglkno35000numrsdw335ye5"], // Orc Warlord (boss)
+        monsterTemplateIds: [], // Will be populated dynamically
         minMonsters: 1,
         maxMonsters: 1,
         eliteChance: 0, // Boss is already elite
@@ -357,7 +463,7 @@ async function main() {
       },
     },
     {
-      type: "BOSS",
+      type: "COMBAT",
       name: "Dragon Lord",
       description:
         "An ancient dragon blocks your path, its scales gleaming like precious metals.",
@@ -368,8 +474,9 @@ async function main() {
         bossType: "dragon",
         phases: 3,
         specialAbilities: ["fire_breath", "fly", "summon", "heal"],
+        isBossFight: true,
         // New monster template system
-        monsterTemplateIds: ["cmglkno2w000lumrsi2waxhdx"], // Dragon (boss)
+        monsterTemplateIds: [], // Will be populated dynamically
         minMonsters: 1,
         maxMonsters: 1,
         eliteChance: 0, // Boss is already elite
@@ -535,21 +642,136 @@ async function main() {
       where: { name: template.name },
     });
 
+    // Populate monster template IDs dynamically based on template name
+    let templateData = { ...template };
+
+    if (template.name === "Goblin Ambush") {
+      const goblinWarrior = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Warrior" },
+      });
+      const goblinArcher = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Archer" },
+      });
+      const ids = [];
+      if (goblinWarrior) ids.push(goblinWarrior.id);
+      if (goblinArcher) ids.push(goblinArcher.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Skeleton Warriors") {
+      const knight = await prisma.monsterTemplate.findFirst({
+        where: { name: "Knight" },
+      });
+      const banditScout = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Scout" },
+      });
+      const darkMage = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dark Mage" },
+      });
+      const ids = [];
+      if (knight) ids.push(knight.id);
+      if (banditScout) ids.push(banditScout.id);
+      if (darkMage) ids.push(darkMage.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Bandit Raid") {
+      const banditScout = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Scout" },
+      });
+      if (banditScout && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [banditScout.id];
+      }
+    } else if (template.name === "Demon Encounter") {
+      const warlock = await prisma.monsterTemplate.findFirst({
+        where: { name: "Warlock" },
+      });
+      const rageDemon = await prisma.monsterTemplate.findFirst({
+        where: { name: "Rage Demon" },
+      });
+      const lichKing = await prisma.monsterTemplate.findFirst({
+        where: { name: "Lich King" },
+      });
+      const ids = [];
+      if (warlock) ids.push(warlock.id);
+      if (rageDemon) ids.push(rageDemon.id);
+      if (lichKing) ids.push(lichKing.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Sparring Session") {
+      const sparringPartner = await prisma.monsterTemplate.findFirst({
+        where: { name: "Sparring Partner" },
+      });
+      if (sparringPartner && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [sparringPartner.id];
+      }
+    } else if (template.name === "Master Training Dummy Challenge") {
+      const masterDummy = await prisma.monsterTemplate.findFirst({
+        where: { name: "Master Training Dummy" },
+      });
+      if (masterDummy && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [masterDummy.id];
+      }
+    } else if (template.name === "Goblin Chief") {
+      const orcWarlord = await prisma.monsterTemplate.findFirst({
+        where: { name: "Orc Warlord" },
+      });
+      if (orcWarlord && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [orcWarlord.id];
+      }
+    } else if (template.name === "Dragon Lord") {
+      const dragon = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dragon" },
+      });
+      if (dragon && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [dragon.id];
+      }
+    }
+
     if (!existing) {
       await prisma.eventTemplate.create({
-        data: template as any,
+        data: templateData as any,
       });
       console.log(`✓ Created template: ${template.name}`);
     } else {
       await prisma.eventTemplate.update({
         where: { id: existing.id },
-        data: template as any,
+        data: templateData as any,
       });
       console.log(`✓ Updated template: ${template.name}`);
     }
   }
 
   console.log("✅ Event templates seed complete!");
+
+  // Link boss template to Solo Training Ground mission
+  console.log("🔗 Linking boss template to Solo Training Ground mission...");
+  const trainingGroundMission = await prisma.mission.findFirst({
+    where: { name: "Solo Training Ground" },
+  });
+
+  if (trainingGroundMission) {
+    const masterDummyBossTemplate = await prisma.eventTemplate.findFirst({
+      where: { name: "Master Training Dummy Challenge" },
+    });
+
+    if (masterDummyBossTemplate) {
+      await prisma.mission.update({
+        where: { id: trainingGroundMission.id },
+        data: { bossTemplateId: masterDummyBossTemplate.id },
+      });
+      console.log(
+        `✅ Linked Master Training Dummy Challenge boss template to Solo Training Ground mission`
+      );
+    } else {
+      console.log("❌ Master Training Dummy Challenge boss template not found");
+    }
+  } else {
+    console.log(
+      "❌ Solo Training Ground mission not found for boss template linking"
+    );
+  }
 }
 
 main()

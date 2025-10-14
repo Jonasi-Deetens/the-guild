@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -25,6 +26,7 @@ import {
 } from "@/components/icons";
 import { useWebSocketStore } from "@/stores/websocket";
 import { api } from "@/trpc/react";
+import { PartyLootSettings } from "@/components/game/PartyLootSettings";
 
 interface Party {
   id: string;
@@ -48,9 +50,12 @@ interface Party {
     isReady: boolean;
   }>;
   createdAt: string;
+  lootDistributionType: string;
+  masterLooterId?: string;
 }
 
 export default function PartiesPage() {
+  const router = useRouter();
   const [parties, setParties] = useState<Party[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -60,14 +65,12 @@ export default function PartiesPage() {
     isPublic: false,
     maxMembers: 5,
   });
-  const [currentParty, setCurrentParty] = useState<Party | null>(null);
   const [partyChat, setPartyChat] = useState<
     Array<{ message: string; sender: string; timestamp: string }>
   >([]);
   const [chatMessage, setChatMessage] = useState("");
 
   const {
-    currentParty: wsCurrentParty,
     partyChat: wsPartyChat,
     createParty: wsCreateParty,
     joinParty: wsJoinParty,
@@ -81,16 +84,12 @@ export default function PartiesPage() {
   const joinPartyMutation = api.party.join.useMutation();
   const leavePartyMutation = api.party.leave.useMutation();
   const toggleReadyMutation = api.party.toggleReady.useMutation();
+  const updateVisibilityMutation = api.party.updateVisibility.useMutation();
   const { data: publicParties, refetch: refetchParties } =
     api.party.getPublic.useQuery();
   const { data: myCurrentParty, refetch: refetchMyParty } =
     api.party.getMyCurrent.useQuery();
-
-  useEffect(() => {
-    if (wsCurrentParty) {
-      setCurrentParty(wsCurrentParty);
-    }
-  }, [wsCurrentParty]);
+  const { data: myCharacter } = api.character.getCurrentCharacter.useQuery();
 
   useEffect(() => {
     setPartyChat(wsPartyChat);
@@ -148,8 +147,25 @@ export default function PartiesPage() {
   const handleToggleReady = async (isReady: boolean) => {
     try {
       await toggleReadyMutation.mutateAsync({ isReady });
+      // Refetch party data to update the UI
+      await refetchMyParty();
     } catch (error) {
       console.error("Failed to toggle ready status:", error);
+      // TODO: Show error message to user
+    }
+  };
+
+  const handleToggleVisibility = async (isPublic: boolean) => {
+    if (!myCurrentParty) return;
+
+    try {
+      await updateVisibilityMutation.mutateAsync({
+        partyId: myCurrentParty.id,
+        isPublic,
+      });
+      await refetchMyParty();
+    } catch (error) {
+      console.error("Failed to update party visibility:", error);
       // TODO: Show error message to user
     }
   };
@@ -163,40 +179,55 @@ export default function PartiesPage() {
 
   const filteredParties = parties.filter(
     (party) =>
-      party.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      party.leader.name.toLowerCase().includes(searchTerm.toLowerCase())
+      (party.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        party.leader.name.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      party.id !== myCurrentParty?.id
   );
 
-  if (currentParty) {
+  if (myCurrentParty) {
     return (
-      <div className="space-y-6">
+      <div className="h-screen overflow-y-auto p-8 space-y-6">
         {/* Party Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-white">
-              {currentParty.name || "Unnamed Party"}
+              {myCurrentParty.name || "Unnamed Party"}
             </h1>
-            <p className="text-gray-300">Status: {currentParty.status}</p>
+            <p className="text-gray-300">Status: {myCurrentParty.status}</p>
           </div>
-          <Button variant="destructive" onClick={handleLeaveParty}>
-            Leave Party
-          </Button>
+          <div className="flex items-center space-x-3">
+            {/* Party Visibility Toggle - Only for party leader */}
+            {myCharacter?.id === myCurrentParty.leader.id && (
+              <Button
+                variant={myCurrentParty.isPublic ? "default" : "outline"}
+                size="sm"
+                onClick={() => handleToggleVisibility(!myCurrentParty.isPublic)}
+                disabled={updateVisibilityMutation.isPending}
+              >
+                {myCurrentParty.isPublic ? "Public" : "Private"}
+              </Button>
+            )}
+            <Button variant="destructive" onClick={handleLeaveParty}>
+              Leave Party
+            </Button>
+          </div>
         </div>
 
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Party Members */}
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid lg:grid-cols-2 gap-6">
+          {/* Main Content Area */}
+          <div className="space-y-6">
+            {/* Party Members */}
             <Card className="glass">
               <CardHeader>
                 <CardTitle className="flex items-center">
                   <Users className="h-5 w-5 mr-2 text-blue-400" />
-                  Party Members ({currentParty.members.length}/
-                  {currentParty.maxMembers})
+                  Party Members ({myCurrentParty.members.length}/
+                  {myCurrentParty.maxMembers})
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {currentParty.members.map((member) => (
+                  {myCurrentParty.members.map((member) => (
                     <div
                       key={member.character.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50"
@@ -210,7 +241,8 @@ export default function PartiesPage() {
                             <span className="text-white font-medium">
                               {member.character.name}
                             </span>
-                            {member.character.id === currentParty.leader.id && (
+                            {member.character.id ===
+                              myCurrentParty.leader.id && (
                               <Crown className="h-4 w-4 text-yellow-400" />
                             )}
                           </div>
@@ -283,8 +315,9 @@ export default function PartiesPage() {
             </Card>
           </div>
 
-          {/* Party Actions */}
+          {/* Secondary Content Area */}
           <div className="space-y-6">
+            {/* Party Actions */}
             <Card className="glass">
               <CardHeader>
                 <CardTitle>Party Actions</CardTitle>
@@ -292,27 +325,54 @@ export default function PartiesPage() {
               <CardContent className="space-y-3">
                 <Button
                   className="w-full justify-start"
-                  onClick={() =>
-                    handleToggleReady(
-                      !currentParty.members.find(
-                        (m) => m.character.id === "current-user"
-                      )?.isReady
-                    )
-                  }
+                  onClick={() => {
+                    const currentMember = myCurrentParty.members.find(
+                      (m) => m.character.id === myCharacter?.id
+                    );
+                    if (currentMember) {
+                      handleToggleReady(!currentMember.isReady);
+                    }
+                  }}
                 >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Toggle Ready
+                  {myCurrentParty.members.find(
+                    (m) => m.character.id === myCharacter?.id
+                  )?.isReady ? (
+                    <XCircle className="h-4 w-4 mr-2" />
+                  ) : (
+                    <CheckCircle className="h-4 w-4 mr-2" />
+                  )}
+                  {myCurrentParty.members.find(
+                    (m) => m.character.id === myCharacter?.id
+                  )?.isReady
+                    ? "Not Ready"
+                    : "Ready"}
                 </Button>
                 <Button variant="outline" className="w-full justify-start">
                   <Users className="h-4 w-4 mr-2" />
                   Invite Players
                 </Button>
-                <Button variant="outline" className="w-full justify-start">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => router.push("/game/missions")}
+                >
                   <Star className="h-4 w-4 mr-2" />
                   Start Mission
                 </Button>
               </CardContent>
             </Card>
+
+            {/* Loot Distribution Settings */}
+            <PartyLootSettings
+              partyId={myCurrentParty.id}
+              isLeader={myCharacter?.id === myCurrentParty.leader.id}
+              currentSettings={{
+                lootDistributionType:
+                  myCurrentParty.lootDistributionType || "AUTO",
+                masterLooterId: myCurrentParty.masterLooterId,
+              }}
+              partyMembers={myCurrentParty.members}
+            />
 
             {/* Party Settings */}
             <Card className="glass">
@@ -321,11 +381,10 @@ export default function PartiesPage() {
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="text-sm text-gray-400">
-                  <p>Max Members: {currentParty.maxMembers}</p>
-                  <p>Public: {currentParty.isPublic ? "Yes" : "No"}</p>
+                  <p>Max Members: {myCurrentParty.maxMembers}</p>
                   <p>
                     Created:{" "}
-                    {new Date(currentParty.createdAt).toLocaleDateString()}
+                    {new Date(myCurrentParty.createdAt).toLocaleDateString()}
                   </p>
                 </div>
               </CardContent>
@@ -337,7 +396,7 @@ export default function PartiesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="h-screen overflow-y-auto p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -345,23 +404,11 @@ export default function PartiesPage() {
           <p className="text-gray-300">
             Join or create a party to embark on missions together
           </p>
-          {myCurrentParty && (
-            <p className="text-sm text-purple-400 mt-1">
-              Currently in: {myCurrentParty.name || "Unnamed Party"}
-            </p>
-          )}
         </div>
-        {myCurrentParty ? (
-          <Button variant="destructive" onClick={handleLeaveParty}>
-            <XCircle className="h-4 w-4 mr-2" />
-            Leave Party
-          </Button>
-        ) : (
-          <Button onClick={() => setShowCreateModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Party
-          </Button>
-        )}
+        <Button onClick={() => setShowCreateModal(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Party
+        </Button>
       </div>
 
       {/* Search */}

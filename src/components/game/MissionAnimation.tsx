@@ -65,6 +65,20 @@ export function MissionAnimation({
         { text: "Seeking shelter from the sun...", duration: 2000 },
         { text: "Navigating the vast desert...", duration: 3000 },
       ],
+      training_ground: [
+        { text: "Practicing combat techniques...", duration: 3000 },
+        { text: "Training with wooden dummies...", duration: 2500 },
+        { text: "Perfecting your fighting stance...", duration: 3500 },
+        { text: "Working on your reflexes...", duration: 2000 },
+        { text: "Preparing for real combat...", duration: 3000 },
+      ],
+      inn: [
+        { text: "Relaxing in the cozy inn...", duration: 3000 },
+        { text: "Sharing stories with fellow adventurers...", duration: 2500 },
+        { text: "Planning your next adventure...", duration: 3500 },
+        { text: "Resting by the warm fireplace...", duration: 2000 },
+        { text: "Gathering supplies for your journey...", duration: 3000 },
+      ],
     };
 
     return (
@@ -106,6 +120,18 @@ export function MissionAnimation({
         { text: "Sprinting across the desert!", duration: 1800 },
         { text: "Desperately seeking shelter!", duration: 1000 },
       ],
+      training_ground: [
+        { text: "Training intensively!", duration: 1500 },
+        { text: "Practicing combat moves rapidly!", duration: 1200 },
+        { text: "Working on techniques quickly!", duration: 1800 },
+        { text: "Preparing for the final test!", duration: 1000 },
+      ],
+      inn: [
+        { text: "Rushing through the inn!", duration: 1500 },
+        { text: "Quickly gathering supplies!", duration: 1200 },
+        { text: "Hastily preparing for departure!", duration: 1800 },
+        { text: "Urgently finishing preparations!", duration: 1000 },
+      ],
     };
 
     return (
@@ -145,64 +171,62 @@ export function MissionAnimation({
       cave_tunnel: "🕳️",
       mountain_path: "⛰️",
       desert_dunes: "🏜️",
+      training_ground: "🥋",
+      inn: "🏠",
     };
     return icons[environmentType as keyof typeof icons] || "🏰";
   };
 
   return (
-    <div
-      className={`flex flex-col items-center justify-center h-full ${className}`}
-    >
-      {/* Environment Icon */}
-      <div className="text-6xl mb-6 animate-pulse">{getEnvironmentIcon()}</div>
-
-      {/* Mission Timer */}
-      <div
-        className={`text-2xl font-bold mb-4 ${
-          isUrgent ? "text-red-400" : "text-white"
-        }`}
-      >
-        {formatTime(remainingTime)}
-      </div>
-
-      {/* Progress Bar */}
-      <div className="w-64 h-2 bg-gray-700 rounded-full mb-6 overflow-hidden">
-        <div
-          className={`h-full transition-all duration-1000 ${
-            isUrgent ? "bg-red-500" : "bg-blue-500"
-          }`}
-          style={{
-            width: `${Math.max(0, (remainingTime / totalDuration) * 100)}%`,
-          }}
-        />
-      </div>
-
-      {/* Animation Text */}
-      <div className="text-center">
-        <div
-          className={`text-lg font-medium transition-all duration-500 ${
-            isUrgent ? "text-red-300" : "text-gray-300"
-          }`}
-          key={currentTextIndex}
-        >
-          {animationTexts[currentTextIndex]?.text || "Exploring..."}
-        </div>
-
-        {/* Urgency Indicator */}
-        {isUrgent && (
-          <div className="text-sm text-red-400 mt-2 animate-pulse">
-            ⚠️ Time is running out!
+    <div className={`flex items-center justify-center h-full ${className}`}>
+      {/* Centered Card Container */}
+      <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        <div className="flex flex-col items-center justify-center">
+          {/* Environment Icon */}
+          <div className="text-6xl mb-6 animate-pulse">
+            {getEnvironmentIcon()}
           </div>
-        )}
-      </div>
 
-      {/* Environment-specific decorations */}
-      <div className="mt-8 text-4xl opacity-30">
-        {environmentType === "dungeon_corridor" && "⚔️"}
-        {environmentType === "forest_path" && "🍃"}
-        {environmentType === "cave_tunnel" && "💎"}
-        {environmentType === "mountain_path" && "🏔️"}
-        {environmentType === "desert_dunes" && "🌵"}
+          {/* Mission Timer */}
+          <div
+            className={`text-3xl font-bold mb-4 ${
+              isUrgent ? "text-red-400" : "text-white"
+            }`}
+          >
+            {formatTime(remainingTime)}
+          </div>
+
+          {/* Progress Bar */}
+          <div className="w-64 h-3 bg-gray-700/50 rounded-full mb-6 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-1000 ${
+                isUrgent ? "bg-red-500" : "bg-blue-500"
+              }`}
+              style={{
+                width: `${Math.max(0, (remainingTime / totalDuration) * 100)}%`,
+              }}
+            />
+          </div>
+
+          {/* Animation Text */}
+          <div className="text-center">
+            <div
+              className={`text-lg font-medium transition-all duration-500 ${
+                isUrgent ? "text-red-300" : "text-gray-200"
+              }`}
+              key={currentTextIndex}
+            >
+              {animationTexts[currentTextIndex]?.text || "Exploring..."}
+            </div>
+
+            {/* Urgency Indicator */}
+            {isUrgent && (
+              <div className="text-sm text-red-400 mt-2 animate-pulse">
+                ⚠️ Time is running out!
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

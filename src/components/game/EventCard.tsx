@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { MinigameContainer, getMinigameTypeForEvent } from "./minigames";
 
 interface EventCardProps {
@@ -54,10 +54,15 @@ export function EventCard({
   const [showMinigame, setShowMinigame] = useState<boolean>(false);
   const [minigameResult, setMinigameResult] = useState<any>(null);
 
-  const getEventTypeColor = (type: string) => {
+  const getEventTypeColor = (type: string, eventData?: any) => {
+    // Check if this is a boss fight for special styling
+    const isBossFight = eventData?.isBossFight || false;
+
     switch (type) {
       case "COMBAT":
-        return "border-red-500 bg-red-900/20";
+        return isBossFight
+          ? "border-red-600 bg-red-900/30"
+          : "border-red-500 bg-red-900/20";
       case "TREASURE":
         return "border-yellow-500 bg-yellow-900/20";
       case "TRAP":
@@ -68,8 +73,6 @@ export function EventCard({
         return "border-blue-500 bg-blue-900/20";
       case "REST":
         return "border-green-500 bg-green-900/20";
-      case "BOSS":
-        return "border-red-600 bg-red-900/30";
       case "NPC_ENCOUNTER":
         return "border-green-500 bg-green-900/20";
       case "ENVIRONMENTAL_HAZARD":
@@ -81,10 +84,13 @@ export function EventCard({
     }
   };
 
-  const getEventTypeIcon = (type: string) => {
+  const getEventTypeIcon = (type: string, eventData?: any) => {
+    // Check if this is a boss fight for special icon
+    const isBossFight = eventData?.isBossFight || false;
+
     switch (type) {
       case "COMBAT":
-        return "⚔️";
+        return isBossFight ? "👹" : "⚔️";
       case "TREASURE":
         return "💰";
       case "TRAP":
@@ -95,8 +101,6 @@ export function EventCard({
         return "🤔";
       case "REST":
         return "😴";
-      case "BOSS":
-        return "👹";
       case "NPC_ENCOUNTER":
         return "👤";
       case "ENVIRONMENTAL_HAZARD":
@@ -328,44 +332,7 @@ export function EventCard({
           },
         ];
 
-      case "BOSS":
-        return [
-          {
-            id: "ATTACK",
-            label: "Attack",
-            description: "Fight the boss head-on",
-            icon: "⚔️",
-            risk: "high",
-          },
-          {
-            id: "DEFEND",
-            label: "Defend",
-            description: "Focus on defense and survival",
-            icon: "🛡️",
-            risk: "low",
-          },
-          {
-            id: "STRATEGY",
-            label: "Strategy",
-            description: "Use a special tactic",
-            icon: "🧠",
-            risk: "medium",
-          },
-          {
-            id: "FLEE",
-            label: "Flee",
-            description: "Attempt to escape (very risky)",
-            icon: "🏃",
-            risk: "very_high",
-          },
-          {
-            id: "USE_ITEM",
-            label: "Use Item",
-            description: "Consume a powerful item",
-            icon: "🧪",
-            risk: "low",
-          },
-        ];
+      // BOSS events are now handled as COMBAT events with isBossFight flag
 
       case "NPC_ENCOUNTER":
         return [
@@ -546,6 +513,26 @@ export function EventCard({
     setShowMinigame(true);
   };
 
+  // Check if we have saved combat state - if so, auto-start the minigame
+  const hasSavedCombatState =
+    event?.eventData?.combatState &&
+    (event.eventData.combatState.monsters ||
+      event.eventData.combatState.turnCount > 0);
+
+  // Auto-start minigame if we have saved state, otherwise show start button
+  const shouldShowStartButton = !showMinigame && !hasSavedCombatState;
+  const shouldShowMinigame = showMinigame || hasSavedCombatState;
+
+  // Auto-start minigame when we detect saved combat state
+  useEffect(() => {
+    if (hasSavedCombatState && !showMinigame) {
+      console.log(
+        "🔄 [EventCard] Auto-starting minigame due to saved combat state"
+      );
+      setShowMinigame(true);
+    }
+  }, [hasSavedCombatState, showMinigame]);
+
   const getMinigameConfig = (event: any, minigameType: string) => {
     if (minigameType === "COMBAT_CLICKER") {
       // Use template config if available, otherwise use defaults
@@ -581,13 +568,25 @@ export function EventCard({
 
   const eventType = event.type || event.template?.type || "UNKNOWN";
   const availableActions = getAvailableActions(eventType, event.eventData);
-  const minigameType = getMinigameTypeForEvent(event);
+  const minigameType = getMinigameTypeForEvent({
+    type: eventType,
+    template: event.template
+      ? { minigameType: event.template.minigameType }
+      : undefined,
+  });
   const requiresMinigame = minigameType !== "NONE";
 
   return (
-    <div className={`border-2 rounded-lg p-6 ${getEventTypeColor(eventType)}`}>
+    <div
+      className={`bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8 max-w-4xl w-full mx-4 shadow-2xl ${getEventTypeColor(
+        eventType,
+        event.eventData
+      )}`}
+    >
       <div className="flex items-center space-x-3 mb-4">
-        <span className="text-2xl">{getEventTypeIcon(eventType)}</span>
+        <span className="text-2xl">
+          {getEventTypeIcon(eventType, event.eventData)}
+        </span>
         <div>
           <h3 className="text-xl font-bold text-white">
             {event.template?.name || eventType}
@@ -604,8 +603,8 @@ export function EventCard({
       </div>
 
       {/* Event Data Display */}
-      {event.eventData && (
-        <div className="mb-4 p-3 bg-gray-800/50 rounded-lg">
+      {event.eventData && minigameType !== "COMBAT_CLICKER" && (
+        <div className="mb-4 p-3 bg-black/10 backdrop-blur-sm border border-white/5 rounded-lg">
           <h4 className="text-white font-semibold mb-2">Event Details:</h4>
           <div className="text-gray-300 text-sm space-y-1">
             {event.type === "COMBAT" && event.eventData.enemies && (
@@ -617,9 +616,11 @@ export function EventCard({
             {event.type === "TRAP" && event.eventData.trapType && (
               <p>Trap Type: {event.eventData.trapType}</p>
             )}
-            {event.type === "BOSS" && event.eventData.bossType && (
-              <p>Boss: {event.eventData.bossType}</p>
-            )}
+            {event.type === "COMBAT" &&
+              event.eventData.isBossFight &&
+              event.eventData.bossType && (
+                <p>Boss: {event.eventData.bossType}</p>
+              )}
             {event.eventData.timeLimit && (
               <p>Time Limit: {event.eventData.timeLimit}s</p>
             )}
@@ -652,6 +653,8 @@ export function EventCard({
         <div className="mb-4 p-3 bg-gray-800/50 rounded-lg border border-green-500/30">
           <h4 className="text-white font-semibold mb-2">Event Results:</h4>
           <div className="space-y-2 text-sm">
+            {/* Debug: Log event results */}
+            {console.log("🔍 EventCard received results:", event.results)}
             {event.results.type === "combat" && (
               <>
                 {event.results.victory && (
@@ -694,6 +697,41 @@ export function EventCard({
                     </span>
                   </div>
                 )}
+                {event.results.generatedLoot &&
+                  event.results.generatedLoot.length > 0 && (
+                    <div className="text-gray-300">
+                      <div className="font-semibold text-blue-400 mb-1">
+                        Loot Obtained:
+                      </div>
+                      <div className="space-y-1">
+                        {event.results.generatedLoot.map(
+                          (loot: any, index: number) => (
+                            <div
+                              key={index}
+                              className="flex items-center space-x-2"
+                            >
+                              <span className="text-gray-300">
+                                {loot.itemName} x{loot.quantity}
+                              </span>
+                              <span
+                                className={`text-xs px-1 py-0.5 rounded ${
+                                  loot.rarity === "LEGENDARY"
+                                    ? "bg-purple-600 text-purple-100"
+                                    : loot.rarity === "RARE"
+                                    ? "bg-blue-600 text-blue-100"
+                                    : loot.rarity === "UNCOMMON"
+                                    ? "bg-green-600 text-green-100"
+                                    : "bg-gray-600 text-gray-100"
+                                }`}
+                              >
+                                {loot.rarity}
+                              </span>
+                            </div>
+                          )
+                        )}
+                      </div>
+                    </div>
+                  )}
               </>
             )}
             {event.results.type === "treasure" && (
@@ -783,15 +821,15 @@ export function EventCard({
         <div className="space-y-4">
           {requiresMinigame ? (
             <div className="space-y-4">
-              {!showMinigame ? (
+              {shouldShowStartButton ? (
                 <div className="text-center">
                   <h4 className="text-white font-semibold mb-4">
-                    {eventType === "COMBAT" || eventType === "BOSS"
+                    {eventType === "COMBAT"
                       ? "Combat Challenge"
                       : `${eventType} Challenge`}
                   </h4>
                   <p className="text-gray-300 mb-4">
-                    {eventType === "COMBAT" || eventType === "BOSS"
+                    {eventType === "COMBAT"
                       ? "Click monsters to attack! They'll fight back every few seconds."
                       : `This ${eventType.toLowerCase()} requires a minigame challenge.`}
                   </p>
@@ -802,15 +840,16 @@ export function EventCard({
                     Start Challenge
                   </button>
                 </div>
-              ) : (
+              ) : shouldShowMinigame ? (
                 <MinigameContainer
                   type={minigameType}
                   config={getMinigameConfig(event, minigameType)}
                   playerStats={playerStats}
                   partyMembers={partyMembers}
+                  event={event}
                   onComplete={handleMinigameComplete}
                 />
-              )}
+              ) : null}
             </div>
           ) : (
             <div className="space-y-4">
@@ -892,17 +931,6 @@ export function EventCard({
       )}
 
       {/* Player Stats Display */}
-      <div className="mt-4 p-3 bg-gray-800/30 rounded-lg">
-        <h5 className="text-white font-semibold mb-2">Your Stats:</h5>
-        <div className="grid grid-cols-2 gap-2 text-sm">
-          <div className="text-gray-300">Speed: {playerStats.speed}</div>
-          <div className="text-gray-300">
-            Perception: {playerStats.perception}
-          </div>
-          <div className="text-gray-300">Attack: {playerStats.attack}</div>
-          <div className="text-gray-300">Defense: {playerStats.defense}</div>
-        </div>
-      </div>
     </div>
   );
 }

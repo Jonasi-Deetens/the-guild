@@ -16,9 +16,48 @@ export async function POST(request: NextRequest) {
     // Check if user already exists
     const existingUser = await db.user.findUnique({
       where: { email },
+      include: { character: true },
     });
 
     if (existingUser) {
+      // If user exists but has no character, create one
+      if (!existingUser.character) {
+        const character = await db.character.create({
+          data: {
+            name: name,
+            level: 1,
+            experience: 0,
+            currentHealth: 100,
+            maxHealth: 100,
+            attack: 10,
+            defense: 5,
+            speed: 5,
+            perception: 5,
+            gold: 100,
+            reputation: 0,
+            isOnline: false,
+            userId: existingUser.id,
+          },
+        });
+
+        return NextResponse.json(
+          {
+            message: "User character created successfully",
+            user: {
+              id: existingUser.id,
+              name: existingUser.name,
+              email: existingUser.email,
+            },
+            character: {
+              id: character.id,
+              name: character.name,
+              level: character.level,
+            },
+          },
+          { status: 201 }
+        );
+      }
+
       return NextResponse.json(
         { error: "User with this email already exists" },
         { status: 400 }
@@ -42,7 +81,7 @@ export async function POST(request: NextRequest) {
         name: name,
         level: 1,
         experience: 0,
-        health: 100,
+        currentHealth: 100,
         maxHealth: 100,
         attack: 10,
         defense: 5,

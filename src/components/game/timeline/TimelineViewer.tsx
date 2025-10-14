@@ -55,8 +55,7 @@ export function TimelineViewer({
         );
       case "CHOICE":
         return <Users className="w-5 h-5" />;
-      case "BOSS":
-        return <Skull className="w-5 h-5" />;
+      // BOSS events are now handled as COMBAT events
       case "NPC_ENCOUNTER":
         return <Eye className="w-5 h-5" />;
       case "ENVIRONMENTAL_HAZARD":
@@ -78,8 +77,7 @@ export function TimelineViewer({
         return "border-amber-500 bg-amber-500/10 text-amber-400";
       case "CHOICE":
         return "border-blue-500 bg-blue-500/10 text-blue-400";
-      case "BOSS":
-        return "border-red-600 bg-red-600/10 text-red-500";
+      // BOSS events are now handled as COMBAT events
       case "NPC_ENCOUNTER":
         return "border-green-500 bg-green-500/10 text-green-400";
       case "ENVIRONMENTAL_HAZARD":

@@ -16,7 +16,15 @@ async function main() {
       maxPlayers: 1,
       minPlayers: 1,
       baseReward: 50,
-      experienceReward: 20,
+      experienceReward: 5, // Reduced from 20
+      baseDuration: 120, // 2 minutes
+      minEventInterval: 20,
+      maxEventInterval: 40,
+      environmentType: "training_ground",
+      missionType: "CLEAR",
+      failCondition: "DEATH_ONLY",
+      bossTemplateId: null, // Will be set dynamically after event templates are created
+      maxMonstersPerEncounter: 3,
       isActive: true,
     },
     {
@@ -41,6 +49,13 @@ async function main() {
       minPlayers: 2,
       baseReward: 100,
       experienceReward: 30,
+      baseDuration: 600,
+      minEventInterval: 30,
+      maxEventInterval: 60,
+      environmentType: "cave",
+      missionType: "TIMED",
+      failCondition: "TIME_OR_DEATH",
+      maxMonstersPerEncounter: 4,
       isActive: true,
     },
     {
@@ -65,6 +80,13 @@ async function main() {
       minPlayers: 2,
       baseReward: 250,
       experienceReward: 60,
+      baseDuration: 900,
+      minEventInterval: 40,
+      maxEventInterval: 80,
+      environmentType: "cave",
+      missionType: "TIMED",
+      failCondition: "TIME_OR_DEATH",
+      maxMonstersPerEncounter: 5,
       isActive: true,
     },
     {
@@ -169,8 +191,66 @@ async function main() {
     }
   }
 
+  // Map event templates to Solo Training Ground mission
+  console.log("🔗 Mapping event templates to missions...");
+
+  const trainingGroundMission = await prisma.mission.findFirst({
+    where: { name: "Solo Training Ground" },
+  });
+
+  if (trainingGroundMission) {
+    const trainingEventTemplates = await prisma.eventTemplate.findMany({
+      where: {
+        OR: [
+          { name: "Dummy Practice" },
+          { name: "Advanced Practice" },
+          { name: "Sparring Session" },
+        ],
+      },
+    });
+
+    console.log(
+      `📋 Found ${trainingEventTemplates.length} training event templates`
+    );
+
+    // Create mappings with weights
+    for (const template of trainingEventTemplates) {
+      const existingMapping = await prisma.missionEventTemplate.findFirst({
+        where: {
+          missionId: trainingGroundMission.id,
+          eventTemplateId: template.id,
+        },
+      });
+
+      if (!existingMapping) {
+        const weight = template.name === "Sparring Session" ? 3 : 1; // Higher weight for sparring
+        await prisma.missionEventTemplate.create({
+          data: {
+            missionId: trainingGroundMission.id,
+            eventTemplateId: template.id,
+            weight: weight,
+          },
+        });
+        console.log(
+          `🔗 Mapped ${template.name} to Solo Training Ground (weight: ${weight})`
+        );
+      } else {
+        console.log(
+          `⊘ Mapping already exists: ${template.name} -> Solo Training Ground`
+        );
+      }
+    }
+  } else {
+    console.log(
+      "⚠️ Solo Training Ground mission not found, skipping event mappings"
+    );
+  }
+
   console.log("✅ Seed complete!");
 }
+
+// Import and run monster loot seed
+import "./seeds/monsterLoot";
 
 main()
   .catch((e) => {

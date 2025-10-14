@@ -93,6 +93,7 @@ model Character {
   tradeRequestsReceived TradeRequest[]        @relation("TradeRequestTo")
   transactions          Transaction[]         @relation("TransactionActor")
   targetTransactions    Transaction[]         @relation("TransactionTarget")
+  lootRolls             LootRoll[]
 
   @@index([isOnline])
   @@index([reputation])
@@ -100,23 +101,31 @@ model Character {
 }
 
 model Mission {
-  id               String           @id @default(cuid())
+  id               String  @id @default(cuid())
   name             String
   description      String
   difficulty       Int
-  minLevel         Int              @default(1)
-  maxPlayers       Int              @default(5)
-  minPlayers       Int              @default(2)
+  minLevel         Int     @default(1)
+  maxPlayers       Int     @default(5)
+  minPlayers       Int     @default(2)
   baseReward       Int
-  experienceReward Int              @default(10)
-  isActive         Boolean          @default(true)
-  baseDuration     Int              @default(600)
-  minEventInterval Int              @default(30)
-  maxEventInterval Int              @default(90)
-  environmentType  String           @default("dungeon_corridor")
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
-  dungeonSessions  DungeonSession[]
+  experienceReward Int     @default(10)
+  isActive         Boolean @default(true)
+  baseDuration     Int     @default(600)
+  minEventInterval Int     @default(30)
+  maxEventInterval Int     @default(90)
+  environmentType  String  @default("dungeon_corridor")
+
+  // NEW FIELDS
+  missionType             String  @default("TIMED") // TIMED, CLEAR, SURVIVAL
+  failCondition           String  @default("TIME_OR_DEATH") // TIME_OR_DEATH, DEATH_ONLY, BOSS_DEFEAT
+  bossTemplateId          String? // Boss to spawn (for CLEAR missions)
+  maxMonstersPerEncounter Int     @default(4) // Max enemies per combat event
+
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+  dungeonSessions DungeonSession[]
+  allowedEvents   MissionEventTemplate[]
 }
 
 model Party {
@@ -132,6 +141,10 @@ model Party {
   dungeonSessions DungeonSession[]
   leader          Character        @relation("PartyLeader", fields: [leaderId], references: [id])
   members         PartyMember[]
+
+  // Loot distribution settings
+  lootDistributionType LootDistributionType @default(NEED_GREED)
+  masterLooterId       String? // Character ID of master looter (if using master looter system)
 }
 
 model PartyMember {
@@ -207,25 +220,32 @@ model DungeonLoot {
   sessionId String
   item      Item           @relation(fields: [itemId], references: [id])
   session   DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  // Loot distribution system
+  distributionType LootDistributionType @default(AUTO)
+  assignedTo       String? // Character ID this loot is assigned to
+  assignedAt       DateTime?
+  lootRolls        LootRoll[] // Need/Greed rolls for this item
 }
 
 model Item {
-  id          String        @id @default(cuid())
-  name        String
+  id          String             @id @default(cuid())
+  name        String             @unique
   description String
   type        ItemType
-  rarity      ItemRarity    @default(COMMON)
+  rarity      ItemRarity         @default(COMMON)
   value       Int
   attack      Int?
   defense     Int?
   healing     Int?
-  isTradeable Boolean       @default(true)
-  isStackable Boolean       @default(false)
-  maxStack    Int           @default(1)
-  createdAt   DateTime      @default(now())
+  isTradeable Boolean            @default(true)
+  isStackable Boolean            @default(false)
+  maxStack    Int                @default(1)
+  createdAt   DateTime           @default(now())
   dungeonLoot DungeonLoot[]
   inventory   Inventory[]
   Transaction Transaction[]
+  monsterLoot MonsterLootTable[]
 }
 
 model Inventory {
@@ -379,16 +399,31 @@ model CharacterStatistics {
 }
 
 model EventTemplate {
-  id            String         @id @default(cuid())
-  type          EventType
-  name          String
-  description   String
-  difficulty    Int
-  minigameType  MinigameType?
-  config        Json
-  outcomes      Json
-  createdAt     DateTime       @default(now())
-  dungeonEvents DungeonEvent[]
+  id               String                 @id @default(cuid())
+  type             EventType
+  name             String
+  description      String
+  difficulty       Int
+  minigameType     MinigameType?
+  config           Json
+  outcomes         Json
+  createdAt        DateTime               @default(now())
+  dungeonEvents    DungeonEvent[]
+  missionTemplates MissionEventTemplate[]
+}
+
+model MissionEventTemplate {
+  id              String   @id @default(cuid())
+  missionId       String
+  eventTemplateId String
+  weight          Int      @default(1) // For weighted random selection
+  createdAt       DateTime @default(now())
+
+  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
+  eventTemplate EventTemplate @relation(fields: [eventTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([missionId, eventTemplateId])
+  @@index([missionId])
 }
 
 model DungeonEvent {
@@ -429,19 +464,49 @@ model DungeonPlayerAction {
 }
 
 model MonsterTemplate {
-  id          String        @id @default(cuid())
-  name        String        @unique
+  id          String             @id @default(cuid())
+  name        String             @unique
   type        MonsterType
   baseHealth  Int
   baseAttack  Int
   baseDefense Int
-  attackSpeed Float         @default(1.0)
-  canBeElite  Boolean       @default(true)
+  attackSpeed Float              @default(1.0)
+  canBeElite  Boolean            @default(true)
   abilities   Json?
-  rarity      MonsterRarity @default(COMMON)
+  rarity      MonsterRarity      @default(COMMON)
   description String?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  lootTable   MonsterLootTable[]
+}
+
+model MonsterLootTable {
+  id                String          @id @default(cuid())
+  monsterTemplate   MonsterTemplate @relation(fields: [monsterTemplateId], references: [id], onDelete: Cascade)
+  monsterTemplateId String
+  item              Item            @relation(fields: [itemId], references: [id])
+  itemId            String
+  dropChance        Float // 0.0 to 1.0 (e.g., 0.15 = 15%)
+  minQuantity       Int             @default(1)
+  maxQuantity       Int             @default(1)
+  rarityModifier    Float           @default(1.0) // Multiplier for ELITE/RARE/BOSS
+  createdAt         DateTime        @default(now())
+
+  @@unique([monsterTemplateId, itemId])
+}
+
+model LootRoll {
+  id          String       @id @default(cuid())
+  lootId      String
+  characterId String
+  rollType    LootRollType
+  rollValue   Int // 1-100 for Greed, 100 for Need
+  rolledAt    DateTime     @default(now())
+
+  loot      DungeonLoot @relation(fields: [lootId], references: [id], onDelete: Cascade)
+  character Character   @relation(fields: [characterId], references: [id], onDelete: Cascade)
+
+  @@unique([lootId, characterId])
 }
 
 enum PartyStatus {
@@ -534,7 +599,6 @@ enum EventType {
   PUZZLE
   CHOICE
   REST
-  BOSS
   BETRAYAL_OPPORTUNITY
   NPC_ENCOUNTER
   ENVIRONMENTAL_HAZARD
@@ -573,4 +637,15 @@ enum MonsterRarity {
   ELITE
   RARE
   BOSS
+}
+
+enum LootDistributionType {
+  AUTO // Automatic distribution (current system)
+  NEED_GREED // Need/Greed rolling system
+  MASTER_LOOTER // Master looter assigns items
+}
+
+enum LootRollType {
+  NEED // Need roll (always 100, highest priority)
+  GREED // Greed roll (1-100, lower priority than Need)
 }

@@ -529,7 +529,7 @@ export const characterRouter = createTRPCRouter({
           pendingStatPoints:
             character.pendingStatPoints - getStatPointsPerLevel(),
           maxHealth: { increment: input.statAllocations.maxHealth },
-          health: { increment: input.statAllocations.maxHealth }, // Also heal
+          currentHealth: { increment: input.statAllocations.maxHealth }, // Also heal
           attack: { increment: input.statAllocations.attack },
           defense: { increment: input.statAllocations.defense },
           speed: { increment: input.statAllocations.speed },

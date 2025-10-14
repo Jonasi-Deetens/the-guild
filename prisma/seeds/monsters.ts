@@ -330,6 +330,49 @@ async function main() {
         },
       },
     },
+    // TRAINING DUMMIES - Low stats for practice
+    {
+      name: "Training Dummy",
+      type: "TANK",
+      baseHealth: 50,
+      baseAttack: 5,
+      baseDefense: 3,
+      attackSpeed: 1.5,
+      rarity: "COMMON",
+      description: "A wooden training dummy for practicing combat.",
+    },
+    {
+      name: "Advanced Training Dummy",
+      type: "WARRIOR",
+      baseHealth: 75,
+      baseAttack: 8,
+      baseDefense: 5,
+      attackSpeed: 1.2,
+      rarity: "COMMON",
+      description: "A sturdier training dummy with better durability.",
+    },
+    {
+      name: "Master Training Dummy",
+      type: "WARRIOR",
+      baseHealth: 200,
+      baseAttack: 15,
+      baseDefense: 10,
+      attackSpeed: 1.0,
+      rarity: "BOSS",
+      description:
+        "The ultimate training challenge. A master-crafted dummy with advanced combat routines.",
+    },
+    {
+      name: "Sparring Partner",
+      type: "WARRIOR",
+      baseHealth: 120,
+      baseAttack: 12,
+      baseDefense: 8,
+      attackSpeed: 1.1,
+      rarity: "COMMON",
+      description:
+        "A skilled fighter who helps you practice combat techniques.",
+    },
   ];
 
   for (const template of monsterTemplates) {

@@ -29,16 +29,42 @@ export class EventSpawner {
   static async checkForEventSpawn(sessionId: string): Promise<boolean> {
     const session = await db.dungeonSession.findUnique({
       where: { id: sessionId },
-      include: { mission: true },
+      include: {
+        mission: true,
+        events: {
+          where: { status: { in: ["PENDING", "ACTIVE"] } },
+          orderBy: { eventNumber: "asc" },
+        },
+      },
     });
 
     if (!session || session.status !== "ACTIVE") {
       return false;
     }
 
-    // Don't spawn if there's already an active event
+    // Don't spawn if there's an active event
     if (session.currentEventId) {
+      console.log(
+        `⏸️ Event ${session.currentEventId} is active, skipping spawn`
+      );
       return false;
+    }
+
+    // Don't spawn if mission is paused
+    if (session.pausedAt) {
+      console.log(`⏸️ Mission is paused, skipping spawn`);
+      return false;
+    }
+
+    // Check if there are any PENDING events that should be activated
+    const pendingEvents = session.events.filter(
+      (event) => event.status === "PENDING"
+    );
+    if (pendingEvents.length > 0) {
+      // Activate the next pending event instead of creating a new one
+      const nextEvent = pendingEvents[0];
+      await this.activatePendingEvent(sessionId, nextEvent.id);
+      return false; // Don't create a new event
     }
 
     // Check if we have a next spawn time and if it's time to spawn
@@ -68,6 +94,74 @@ export class EventSpawner {
   }
 
   /**
+   * Activate a pending event instead of creating a new one
+   */
+  static async activatePendingEvent(
+    sessionId: string,
+    eventId: string
+  ): Promise<void> {
+    console.log(
+      `🔄 Activating pending event ${eventId} for session ${sessionId}`
+    );
+
+    // Get the event with its template
+    const event = await db.dungeonEvent.findUnique({
+      where: { id: eventId },
+      include: { template: true },
+    });
+
+    if (!event) {
+      throw new Error(`Event ${eventId} not found`);
+    }
+
+    // Generate monsters for combat events
+    let updatedEventData = event.eventData;
+    if (event.template?.type === "COMBAT") {
+      console.log(`🎯 Generating monsters for combat event ${eventId}`);
+      const monsters = await this.generateMonstersForEvent(event.template);
+
+      // Add initial combat state with generated monsters
+      const combatState = {
+        monsters: monsters,
+        turnCount: 0,
+        playerDamageDealt: 0,
+        enemyDamageDealt: {}, // Should be Record<string, number>, not a number
+        monstersDefeated: 0,
+        partyHealthUpdates: {},
+      };
+
+      updatedEventData = {
+        ...event.eventData,
+        combatState: combatState,
+      };
+    }
+
+    // Update the event status to ACTIVE with generated monsters
+    await db.dungeonEvent.update({
+      where: { id: eventId },
+      data: {
+        status: "ACTIVE",
+        startsAt: new Date(),
+        eventData: updatedEventData,
+      },
+    });
+
+    // Update session to set this as the current event and pause timer
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        currentEventId: eventId,
+        pausedAt: new Date(),
+        nextEventSpawnTime: null, // Will be set when event completes
+      },
+    });
+
+    console.log(
+      `✅ Activated pending event ${eventId} for session ${sessionId}`
+    );
+  }
+
+  /**
    * Spawn a random event for the mission
    */
   static async spawnEvent(sessionId: string): Promise<string | null> {
@@ -85,65 +179,96 @@ export class EventSpawner {
       return null;
     }
 
-    // Select random event type based on difficulty
-    const eventType = this.selectRandomEventType(session.mission.difficulty);
-
-    // Get available event templates for this type
-    const templates = await db.eventTemplate.findMany({
-      where: {
-        type: eventType,
-        difficulty: {
-          lte: session.mission.difficulty,
-        },
+    // Before creating event, pause timer
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        pausedAt: new Date(),
+        currentEventId: null, // Will be set after event creation
       },
     });
 
-    if (templates.length === 0) {
+    // Get allowed event templates for this mission
+    const allowedEventMappings = await db.missionEventTemplate.findMany({
+      where: { missionId: session.mission.id },
+      include: { eventTemplate: true },
+    });
+
+    if (allowedEventMappings.length === 0) {
       console.warn(
-        `No event templates found for type ${eventType} and difficulty ${session.mission.difficulty}`
+        `No event templates configured for mission ${session.mission.id}`
       );
       return null;
     }
 
-    // Select random template
-    const template = templates[Math.floor(Math.random() * templates.length)];
+    // Filter by difficulty and environment
+    const validMappings = allowedEventMappings.filter((mapping) => {
+      const template = mapping.eventTemplate;
+      if (template.difficulty > session.mission.difficulty) return false;
+
+      const config = template.config as any;
+      if (
+        config.environments &&
+        !config.environments.includes(session.mission.environmentType)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (validMappings.length === 0) {
+      console.warn(
+        `No valid event templates for mission ${session.mission.id} at difficulty ${session.mission.difficulty}`
+      );
+      return null;
+    }
+
+    // Weighted random selection
+    const totalWeight = validMappings.reduce((sum, m) => sum + m.weight, 0);
+    let random = Math.random() * totalWeight;
+
+    let selectedMapping = validMappings[0];
+    for (const mapping of validMappings) {
+      random -= mapping.weight;
+      if (random <= 0) {
+        selectedMapping = mapping;
+        break;
+      }
+    }
+
+    const template = selectedMapping.eventTemplate;
 
     // Generate fresh event data
     const eventData = this.generateEventData(
       template,
-      session.mission.difficulty
+      session.mission.difficulty,
+      session.mission
     );
 
-    // Create the event
+    // Create the event with PENDING status initially
     const event = await db.dungeonEvent.create({
       data: {
         sessionId: sessionId,
         templateId: template.id,
         eventNumber: session.events.length + 1,
-        status: "ACTIVE",
+        status: "PENDING",
         eventData: eventData,
-        startsAt: new Date(),
+        startsAt: null, // Will be set when activated
       },
     });
 
-    console.log(`🎲 Created fresh event:`, {
+    console.log(`🎲 Created pending event:`, {
       id: event.id,
       eventNumber: event.eventNumber,
       status: event.status,
       hasPlayerActions: false, // Fresh events should have no player actions
     });
 
-    // Update session to pause timer and set current event
-    await db.dungeonSession.update({
-      where: { id: sessionId },
-      data: {
-        currentEventId: event.id,
-        pausedAt: new Date(),
-        nextEventSpawnTime: null, // Will be set when event completes
-      },
-    });
+    // Immediately activate the event since we're spawning it now
+    await this.activatePendingEvent(sessionId, event.id);
 
-    console.log(`🎲 Spawned ${eventType} event for session ${sessionId}`);
+    console.log(`🎲 Spawned ${template.type} event for session ${sessionId}`);
     return event.id;
   }
 
@@ -172,7 +297,7 @@ export class EventSpawner {
       },
     });
 
-    // Calculate pause duration and add to total
+    // Resume timer after event completion
     const pauseDuration = session.pausedAt
       ? Math.floor((Date.now() - session.pausedAt.getTime()) / 1000)
       : 0;
@@ -188,7 +313,7 @@ export class EventSpawner {
       where: { id: sessionId },
       data: {
         currentEventId: null,
-        pausedAt: null,
+        pausedAt: null, // Resume timer
         totalPausedTime: session.totalPausedTime + pauseDuration,
         nextEventSpawnTime: nextSpawnTime,
       },
@@ -204,63 +329,13 @@ export class EventSpawner {
   }
 
   /**
-   * Select a random event type based on mission difficulty
-   */
-  private static selectRandomEventType(difficulty: number): EventType {
-    const eventWeights = this.getEventWeights(difficulty);
-    const totalWeight = eventWeights.reduce((sum, weight) => sum + weight, 0);
-    const random = Math.random() * totalWeight;
-
-    let currentWeight = 0;
-    for (let i = 0; i < eventWeights.length; i++) {
-      currentWeight += eventWeights[i];
-      if (random <= currentWeight) {
-        return Object.values(EventType)[i] as EventType;
-      }
-    }
-
-    // Fallback to COMBAT
-    return EventType.COMBAT;
-  }
-
-  /**
-   * Get event type weights based on difficulty
-   */
-  private static getEventWeights(difficulty: number): number[] {
-    // Higher difficulty = more combat and boss events
-    const baseWeights = {
-      [EventType.COMBAT]: 30,
-      [EventType.TREASURE]: 20,
-      [EventType.TRAP]: 15,
-      [EventType.PUZZLE]: 10,
-      [EventType.CHOICE]: 10,
-      [EventType.REST]: 5,
-      [EventType.BOSS]: 0,
-      [EventType.BETRAYAL_OPPORTUNITY]: 5,
-      [EventType.NPC_ENCOUNTER]: 5,
-      [EventType.ENVIRONMENTAL_HAZARD]: 0,
-    };
-
-    // Adjust weights based on difficulty
-    if (difficulty >= 4) {
-      baseWeights[EventType.BOSS] = 15;
-      baseWeights[EventType.COMBAT] = 40;
-      baseWeights[EventType.ENVIRONMENTAL_HAZARD] = 10;
-    }
-
-    if (difficulty >= 5) {
-      baseWeights[EventType.BOSS] = 25;
-      baseWeights[EventType.COMBAT] = 35;
-      baseWeights[EventType.ENVIRONMENTAL_HAZARD] = 15;
-    }
-
-    return Object.values(baseWeights);
-  }
-
-  /**
    * Generate event-specific data based on template and difficulty
    */
-  private static generateEventData(template: any, difficulty: number): any {
+  private static generateEventData(
+    template: any,
+    difficulty: number,
+    mission: any
+  ): any {
     const baseData = {
       difficulty: difficulty,
       timestamp: new Date().toISOString(),
@@ -270,7 +345,10 @@ export class EventSpawner {
       case EventType.COMBAT:
         return {
           ...baseData,
-          enemyCount: Math.min(3, Math.floor(difficulty / 2) + 1),
+          enemyCount: Math.min(
+            mission.maxMonstersPerEncounter || 4,
+            Math.floor(difficulty / 2) + 1
+          ),
           enemyLevel: difficulty * 2,
         };
 
@@ -307,7 +385,7 @@ export class EventSpawner {
           healingAmount: 20 + difficulty * 5,
         };
 
-      case EventType.BOSS:
+      case EventType.COMBAT:
         return {
           ...baseData,
           bossLevel: difficulty * 3,
@@ -332,7 +410,6 @@ export class EventSpawner {
   static shouldPauseTimer(eventType: EventType): boolean {
     const pauseEvents = [
       EventType.COMBAT,
-      EventType.BOSS,
       EventType.PUZZLE,
       EventType.TRAP,
       EventType.ENVIRONMENTAL_HAZARD,
@@ -386,5 +463,173 @@ export class EventSpawner {
     console.log(
       `🎯 Initialized mission ${sessionId}, first event spawn at ${firstSpawnTime.toISOString()}`
     );
+  }
+
+  /**
+   * Spawn a combat event (for CLEAR missions when timer expires, or regular combat)
+   */
+  static async spawnCombatEvent(
+    sessionId: string,
+    combatTemplateId: string,
+    isBossFight: boolean = false
+  ): Promise<string> {
+    const template = await db.eventTemplate.findUnique({
+      where: { id: combatTemplateId },
+    });
+
+    if (!template) throw new Error("Combat template not found");
+
+    console.log(`🎯 Spawning combat event with template:`, {
+      id: template.id,
+      type: template.type,
+      name: template.name,
+      isBossFight,
+    });
+
+    const session = await db.dungeonSession.findUnique({
+      where: { id: sessionId },
+      include: { mission: true },
+    });
+
+    if (!session) throw new Error("Session not found");
+
+    // Pause timer during boss fight
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: {
+        pausedAt: new Date(),
+      },
+    });
+
+    // Create combat event
+    const eventData = this.generateEventData(
+      template,
+      session.mission.difficulty,
+      session.mission
+    );
+
+    // Add isBossFight flag to eventData
+    if (isBossFight) {
+      eventData.isBossFight = true;
+    }
+
+    // Generate monsters for boss event immediately
+    const monsters = await this.generateMonstersForEvent(template);
+
+    // Add initial combat state with generated monsters
+    const combatState = {
+      monsters: monsters,
+      turnCount: 0,
+      playerDamageDealt: 0,
+      enemyDamageDealt: {}, // Should be Record<string, number>, not a number
+      monstersDefeated: 0,
+      partyHealthUpdates: {},
+    };
+
+    const event = await db.dungeonEvent.create({
+      data: {
+        sessionId: sessionId,
+        templateId: template.id,
+        eventNumber:
+          (await db.dungeonEvent.count({ where: { sessionId } })) + 1,
+        status: "ACTIVE",
+        eventData: {
+          ...eventData,
+          combatState: combatState,
+        },
+        startsAt: new Date(),
+      },
+    });
+
+    await db.dungeonSession.update({
+      where: { id: sessionId },
+      data: { currentEventId: event.id },
+    });
+
+    console.log(`🎯 Combat event created:`, {
+      eventId: event.id,
+      templateType: template.type,
+      status: event.status,
+      isBossFight,
+    });
+
+    return event.id;
+  }
+
+  /**
+   * Generate monsters for an event template
+   */
+  private static async generateMonstersForEvent(template: any): Promise<any[]> {
+    const config = template.config || {};
+
+    // Fetch monster templates
+    const templates = await db.monsterTemplate.findMany({
+      where: {
+        id: {
+          in: config.monsterTemplateIds || [],
+        },
+      },
+    });
+
+    if (templates.length === 0) {
+      console.log("⚠️ No monster templates found for event");
+      return [];
+    }
+
+    // Determine number of monsters to generate
+    const minMonsters = config.minMonsters || 1;
+    const maxMonsters = config.maxMonsters || 1;
+    const monsterCount =
+      Math.floor(Math.random() * (maxMonsters - minMonsters + 1)) + minMonsters;
+
+    const monsters = [];
+    for (let i = 0; i < monsterCount; i++) {
+      // Pick random template
+      const templateIndex = Math.floor(Math.random() * templates.length);
+      const monsterTemplate = templates[templateIndex];
+
+      // Determine rarity
+      const eliteChance = config.eliteChance || 0.2;
+      const specialAbilityChance = config.specialAbilityChance || 0.3;
+
+      let rarity = "COMMON";
+      if (Math.random() < eliteChance) {
+        rarity = "ELITE";
+      } else if (Math.random() < specialAbilityChance) {
+        rarity = "RARE";
+      }
+
+      // Generate monster instance
+      const monster = {
+        id: `monster-${i}-${Date.now()}`,
+        templateId: monsterTemplate.id,
+        name: monsterTemplate.name,
+        type: monsterTemplate.type,
+        rarity: rarity,
+        health: monsterTemplate.baseHealth,
+        maxHealth: monsterTemplate.baseHealth,
+        attack: monsterTemplate.baseAttack,
+        defense: monsterTemplate.baseDefense,
+        attackInterval: monsterTemplate.attackSpeed,
+        nextAttackTime:
+          Date.now() + monsterTemplate.attackSpeed * 1000 + Math.random() * 500, // Add 0-0.5 seconds random offset (reduced to make speed differences more noticeable)
+        abilities: monsterTemplate.abilities,
+        description: monsterTemplate.description,
+      };
+
+      monsters.push(monster);
+    }
+
+    console.log(
+      `🎯 Generated ${monsters.length} monsters for boss event:`,
+      monsters.map((m) => ({
+        name: m.name,
+        health: m.health,
+        rarity: m.rarity,
+        attackSpeed: m.attackInterval,
+        nextAttackTime: new Date(m.nextAttackTime).toLocaleTimeString(),
+      }))
+    );
+    return monsters;
   }
 }

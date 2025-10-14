@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
+import { signOut } from "next-auth/react";
 import { Button } from "@/components/ui/Button";
 import { Card, CardContent } from "@/components/ui/Card";
 import {
@@ -34,11 +35,25 @@ interface GameLayoutProps {
 
 export default function GameLayout({ children }: GameLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const isDungeonPage = pathname?.includes("/game/dungeon/");
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventoryOpen, setInventoryOpen] = useState(false);
   const [statisticsOpen, setStatisticsOpen] = useState(false);
   const [showLevelUpPanel, setShowLevelUpPanel] = useState(false);
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await signOut({
+        redirect: false,
+        callbackUrl: "/auth/login",
+      });
+      router.push("/auth/login");
+    } catch (error) {
+      console.error("Logout error:", error);
+    }
+  };
 
   // Fetch real character data
   const utils = api.useUtils();
@@ -321,6 +336,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
               <Button
                 variant="ghost"
                 className="w-full justify-start text-red-400 hover:text-red-300"
+                onClick={handleLogout}
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Logout
@@ -339,9 +355,9 @@ export default function GameLayout({ children }: GameLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-64">
+      <div className="lg:ml-64 flex flex-col h-screen">
         {/* Top bar */}
-        <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4">
+        <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <Button
               variant="ghost"
@@ -376,7 +392,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
         </div>
 
         {/* Page content */}
-        <main className="p-6">{children}</main>
+        <main className="flex-1 overflow-hidden">{children}</main>
       </div>
 
       {/* Level Up Notification */}

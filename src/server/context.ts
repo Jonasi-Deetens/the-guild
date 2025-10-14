@@ -1,4 +1,5 @@
 import { type CreateNextContextOptions } from "@trpc/server/adapters/next";
+import { type FetchCreateContextFnOptions } from "@trpc/server/adapters/fetch";
 import { type Session } from "next-auth";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -18,7 +19,9 @@ const createInnerTRPCContext = (opts: CreateContextOptions) => {
   };
 };
 
-export const createTRPCContext = async (opts: CreateNextContextOptions) => {
+export const createTRPCContext = async (
+  opts: CreateNextContextOptions | FetchCreateContextFnOptions
+) => {
   // For App Router with fetch adapter, we need to handle auth differently
   let session = null;
 
@@ -59,6 +62,7 @@ const enforceUserIsAuthed = t.middleware(({ ctx, next }) => {
   return next({
     ctx: {
       session: { ...ctx.session, user: ctx.session.user },
+      db: ctx.db, // Pass through the database instance
     },
   });
 });

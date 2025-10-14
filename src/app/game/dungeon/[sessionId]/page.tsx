@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import { Modal } from "@/components/ui/Modal";
@@ -8,10 +9,14 @@ import { EventCard } from "@/components/game/EventCard";
 import { MinigameContainer } from "@/components/game/minigames";
 import { PartyMembersSidebar } from "@/components/game/PartyMembersSidebar";
 import { MissionAnimation } from "@/components/game/MissionAnimation";
+import { EnvironmentBackground } from "@/components/game/EnvironmentBackground";
+import { LootDistributionModal } from "@/components/game/LootDistributionModal";
 import { useDungeonSession } from "@/contexts/DungeonSessionContext";
+import { api } from "@/trpc/react";
 
 export default function DungeonPage() {
   const router = useRouter();
+  const [showLootModal, setShowLootModal] = useState(false);
 
   const {
     session,
@@ -30,9 +35,11 @@ export default function DungeonPage() {
     sendChatMessage,
   } = useDungeonSession();
 
-  // Debug logging for mission status
-  console.log("🔍 Dungeon Page - Session status:", session?.status);
-  console.log("🔍 Dungeon Page - Show completion:", showCompletion);
+  // Get session loot for completion modal
+  const { data: sessionLoot } = api.dungeon.getSessionLoot.useQuery(
+    { sessionId: session?.id || "" },
+    { enabled: !!session?.id && showCompletion }
+  );
 
   const handleMinigameComplete = (result: unknown) => {
     setShowMinigame(false);
@@ -48,86 +55,123 @@ export default function DungeonPage() {
   }
 
   return (
-    <div className="flex h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
-      {/* Party Members Sidebar */}
-      <PartyMembersSidebar
-        partyMembers={partyMembers}
-        partyChat={partyChat}
-        onSendMessage={sendChatMessage}
+    <div className="flex h-screen relative">
+      <EnvironmentBackground
+        environmentType={session.mission.environmentType}
       />
 
-      {/* Main Game Area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="p-4 border-b border-amber-900/30 bg-stone-900/50">
-          <div className="text-center">
-            <h1 className="text-2xl font-bold text-white mb-1">
-              {session.mission.name}
-            </h1>
-            <p className="text-gray-300 text-sm mb-2">
-              {session.mission.description}
-            </p>
-            <div className="flex items-center justify-center space-x-4 text-xs text-gray-400">
-              <span>Status: {session.status}</span>
-              <span>•</span>
-              <span>
-                Difficulty:{" "}
-                {Array.from({ length: 5 }, (_, i) => (
-                  <Star
-                    key={i}
-                    className={`inline h-3 w-3 ${
-                      i < session.mission.difficulty
-                        ? "text-yellow-400"
-                        : "text-gray-600"
-                    }`}
-                  />
-                ))}
-              </span>
-              <span>•</span>
-              <span>
-                Environment: {session.mission.environmentType.replace("_", " ")}
-              </span>
-            </div>
-          </div>
-        </div>
+      {/* Main content with relative z-index */}
+      <div className="relative z-10 flex w-full">
+        {/* Party Members Sidebar */}
+        <PartyMembersSidebar
+          partyMembers={partyMembers}
+          partyChat={partyChat}
+          onSendMessage={sendChatMessage}
+        />
 
-        {/* Mission Timer */}
-        {session.status === "ACTIVE" && (
-          <div className="p-4 border-b border-amber-900/30">
-            <div className="flex items-center justify-center space-x-2">
-              <Clock className="h-5 w-5 text-blue-400" />
-              <span className="text-lg font-semibold text-white">
-                Time Remaining: {Math.floor(remainingTime / 60)}:
-                {(remainingTime % 60).toString().padStart(2, "0")}
-              </span>
-              {session.pausedAt && (
-                <span className="text-sm text-yellow-400 ml-2">
-                  (Paused for event)
+        {/* Main Game Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          {/* Header */}
+          <div className="p-4 border-b border-amber-900/30 bg-stone-900/50">
+            <div className="text-center">
+              <h1 className="text-2xl font-bold text-white mb-1">
+                {session.mission.name}
+              </h1>
+              <p className="text-gray-300 text-sm mb-2">
+                {session.mission.description}
+              </p>
+              <div className="flex items-center justify-center space-x-4 text-xs text-gray-400">
+                <span>Status: {session.status}</span>
+                <span>•</span>
+                <span>
+                  Difficulty:{" "}
+                  {Array.from({ length: 5 }, (_, i) => (
+                    <Star
+                      key={i}
+                      className={`inline h-3 w-3 ${
+                        i < session.mission.difficulty
+                          ? "text-yellow-400"
+                          : "text-gray-600"
+                      }`}
+                    />
+                  ))}
                 </span>
+                <span>•</span>
+                <span>
+                  Environment:{" "}
+                  {session.mission.environmentType.replace("_", " ")}
+                </span>
+              </div>
+              {/* Loot Distribution Button */}
+              {session.party && (
+                <div className="mt-3">
+                  <Button
+                    onClick={() => setShowLootModal(true)}
+                    variant="outline"
+                    size="sm"
+                    className="text-xs"
+                  >
+                    🎁 Loot Distribution
+                  </Button>
+                </div>
               )}
             </div>
           </div>
-        )}
 
-        {/* Main Game Window */}
-        <div className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-4xl mx-auto">
+          {/* Mission Timer */}
+          {session.status === "ACTIVE" && (
+            <div className="p-4 border-b border-amber-900/30">
+              <div className="flex items-center justify-center space-x-2">
+                <Clock className="h-5 w-5 text-blue-400" />
+                <span className="text-lg font-semibold text-white">
+                  Time Remaining: {Math.floor(remainingTime / 60)}:
+                  {(remainingTime % 60).toString().padStart(2, "0")}
+                </span>
+                {session.pausedAt && (
+                  <span className="text-sm text-yellow-400 ml-2">
+                    (Paused for event)
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Main Game Window */}
+          <div className="flex-1 overflow-y-auto p-6">
             {session.status === "WAITING" && (
-              <div className="text-center">
-                <h2 className="text-xl font-bold text-white mb-4">
-                  Mission Ready
-                </h2>
-                <p className="text-gray-300 mb-6">
-                  Duration: {Math.floor(session.mission.baseDuration / 60)}{" "}
-                  minutes
-                </p>
-                <Button
-                  onClick={startMission}
-                  disabled={isLoading}
-                  className="px-8 py-3"
-                >
-                  {isLoading ? "Starting..." : "Start Mission"}
-                </Button>
+              <div className="flex items-center justify-center h-full">
+                {/* Centered Card Container */}
+                <div className="bg-black/20 backdrop-blur-sm border border-white/10 rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+                  <div className="flex flex-col items-center justify-center">
+                    {/* Mission Icon */}
+                    <div className="text-6xl mb-6 animate-pulse">⚔️</div>
+
+                    {/* Mission Title */}
+                    <h2 className="text-3xl font-bold text-white mb-4">
+                      Mission Ready
+                    </h2>
+
+                    {/* Mission Info */}
+                    <div className="text-center mb-6">
+                      <p className="text-gray-300 mb-2">
+                        {session.mission.name}
+                      </p>
+                      <p className="text-sm text-gray-400">
+                        Duration:{" "}
+                        {Math.floor(session.mission.baseDuration / 60)} minutes
+                      </p>
+                    </div>
+
+                    {/* Start Button */}
+                    <Button
+                      onClick={startMission}
+                      disabled={isLoading}
+                      className="px-8 py-3 text-lg font-semibold"
+                    >
+                      {isLoading ? "Starting..." : "Start Mission"}
+                    </Button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -141,13 +185,15 @@ export default function DungeonPage() {
             )}
 
             {session.status === "ACTIVE" && currentEvent && (
-              <EventCard
-                event={currentEvent}
-                onActionSubmit={submitAction}
-                playerStats={playerStats}
-                hasSubmitted={hasPlayerSubmittedAction}
-                partyMembers={partyMembers}
-              />
+              <div className="max-w-4xl mx-auto">
+                <EventCard
+                  event={currentEvent}
+                  onActionSubmit={submitAction}
+                  playerStats={playerStats}
+                  hasSubmitted={hasPlayerSubmittedAction}
+                  partyMembers={partyMembers}
+                />
+              </div>
             )}
 
             {/* Minigame Modal */}
@@ -205,7 +251,7 @@ export default function DungeonPage() {
                 <h3 className="text-lg font-semibold text-white mb-3">
                   Rewards Earned
                 </h3>
-                <div className="grid grid-cols-2 gap-4 text-sm">
+                <div className="grid grid-cols-2 gap-4 text-sm mb-4">
                   <div className="flex items-center justify-between">
                     <span className="text-gray-400">Experience:</span>
                     <span className="text-yellow-400 font-semibold">
@@ -219,6 +265,45 @@ export default function DungeonPage() {
                     </span>
                   </div>
                 </div>
+
+                {/* Loot Display */}
+                {sessionLoot && sessionLoot.length > 0 && (
+                  <div className="border-t border-gray-700 pt-4">
+                    <h4 className="text-md font-semibold text-blue-400 mb-3">
+                      Items Obtained
+                    </h4>
+                    <div className="space-y-2 max-h-32 overflow-y-auto">
+                      {sessionLoot.map((loot: any, index: number) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between text-sm"
+                        >
+                          <div className="flex items-center space-x-2">
+                            <span className="text-gray-300">
+                              {loot.itemName} x{loot.quantity}
+                            </span>
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${
+                                loot.rarity === "LEGENDARY"
+                                  ? "bg-purple-600 text-purple-100"
+                                  : loot.rarity === "RARE"
+                                  ? "bg-blue-600 text-blue-100"
+                                  : loot.rarity === "UNCOMMON"
+                                  ? "bg-green-600 text-green-100"
+                                  : "bg-gray-600 text-gray-100"
+                              }`}
+                            >
+                              {loot.rarity}
+                            </span>
+                          </div>
+                          <span className="text-gray-400 text-xs">
+                            {loot.value * loot.quantity} gold value
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -234,6 +319,17 @@ export default function DungeonPage() {
             </div>
           </div>
         </Modal>
+      )}
+
+      {/* Loot Distribution Modal */}
+      {session && (
+        <LootDistributionModal
+          isOpen={showLootModal}
+          onClose={() => setShowLootModal(false)}
+          sessionId={session.id}
+          characterId={session.party?.members[0]?.character.id || ""}
+          isMasterLooter={false} // TODO: Get from session data when available
+        />
       )}
     </div>
   );
