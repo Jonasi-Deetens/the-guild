@@ -178,14 +178,16 @@ export function LootDistributionModal({
                             className="bg-black/20 border border-white/10 rounded px-3 py-1 text-white"
                           >
                             <option value="">Select character...</option>
-                            {partyMembers.map((member: any) => (
-                              <option
-                                key={member.character.id}
-                                value={member.character.id}
-                              >
-                                {member.character.name}
-                              </option>
-                            ))}
+                            {partyMembers
+                              .filter((member: any) => member.character) // Only show player characters
+                              .map((member: any) => (
+                                <option
+                                  key={member.character.id}
+                                  value={member.character.id}
+                                >
+                                  {member.character.name}
+                                </option>
+                              ))}
                           </select>
                           <Button
                             onClick={() => {

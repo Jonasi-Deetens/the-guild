@@ -78,6 +78,7 @@ interface PartyMember {
   defense: number;
   level: number;
   isDead: boolean;
+  isNPC?: boolean;
 }
 
 interface PlayerStats {
@@ -250,16 +251,42 @@ export function DungeonSessionProvider({
   const partyMembers = useMemo(() => {
     // For party missions, return party members
     if (session?.party) {
-      return session.party.members.map((member) => ({
-        id: member.character.id,
-        name: member.character.name,
-        currentHealth: member.character.currentHealth,
-        maxHealth: member.character.maxHealth,
-        attack: member.character.attack,
-        defense: member.character.defense,
-        level: member.character.level,
-        isDead: member.character.currentHealth <= 0,
-      }));
+      return session.party.members
+        .map((member) => {
+          // Handle NPCs
+          if (member.isNPC && member.npcCompanion) {
+            return {
+              id: member.npcCompanion.id,
+              name: member.npcCompanion.name,
+              currentHealth: member.npcCompanion.maxHealth, // NPCs start at full health
+              maxHealth: member.npcCompanion.maxHealth,
+              attack: member.npcCompanion.attack,
+              defense: member.npcCompanion.defense,
+              level: member.npcCompanion.level,
+              isDead: false, // NPCs start alive
+              isNPC: true,
+            };
+          }
+
+          // Handle player characters
+          if (member.character) {
+            return {
+              id: member.character.id,
+              name: member.character.name,
+              currentHealth: member.character.currentHealth,
+              maxHealth: member.character.maxHealth,
+              attack: member.character.attack,
+              defense: member.character.defense,
+              level: member.character.level,
+              isDead: member.character.currentHealth <= 0,
+              isNPC: false,
+            };
+          }
+
+          // Fallback for invalid members
+          return null;
+        })
+        .filter(Boolean);
     }
 
     // For solo missions, return current player as the only member
