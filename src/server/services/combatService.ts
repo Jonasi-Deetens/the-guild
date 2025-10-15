@@ -1,7 +1,6 @@
 import { db } from "@/lib/db";
 import { LootService } from "./lootService";
 import { RewardService } from "./rewardService";
-import { NPCAiService } from "./npcAiService";
 
 interface CombatState {
   monsters: any[];
@@ -231,30 +230,16 @@ export class CombatService {
         }
       }
 
-      // Process NPC actions after player action
-      const npcResults = await this.processNPCActions(event, combatState);
+      // NPCs now act automatically in the frontend combat system
 
-      // Combine NPC results into the main result
-      const npcMessages = npcResults
-        .map((result) => result.message)
-        .filter(Boolean);
-      const totalNPCDamage = npcResults.reduce(
-        (sum, result) => sum + result.damage,
-        0
-      );
-
-      const combinedMessage =
-        npcMessages.length > 0
-          ? `${message} ${npcMessages.join(" ")}`
-          : message;
+      const combinedMessage = message;
 
       return {
         success: true,
         message: combinedMessage,
-        damage: finalDamage + totalNPCDamage,
+        damage: finalDamage,
         isCritical: isCritical,
         combatState: combatState,
-        npcResults: npcResults,
       };
     } else if (action === "block") {
       // Character blocks - reduce incoming damage
@@ -402,195 +387,6 @@ export class CombatService {
     }
 
     return { isComplete: false, victory: false, defeat: false };
-  }
-
-  /**
-   * Process NPC actions in combat
-   */
-  static async processNPCActions(
-    event: any,
-    combatState: CombatState
-  ): Promise<CombatResult[]> {
-    const npcResults: CombatResult[] = [];
-
-    // Get party members including NPCs
-    const session = await db.dungeonSession.findUnique({
-      where: { id: event.sessionId },
-      include: {
-        party: {
-          include: {
-            members: {
-              include: {
-                character: true,
-                npcCompanion: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!session?.party) {
-      return npcResults;
-    }
-
-    // Find NPCs in the party
-    const npcMembers = session.party.members.filter(
-      (member) => member.isNPC && member.npcCompanion
-    );
-
-    for (const npcMember of npcMembers) {
-      if (!npcMember.npcCompanion) continue;
-
-      const npc = npcMember.npcCompanion;
-
-      // Build combat context for NPC AI
-      const combatContext = {
-        npcId: npc.id,
-        npcHealth: npc.maxHealth, // NPCs start at full health
-        npcMaxHealth: npc.maxHealth,
-        allies: session.party.members
-          .filter((m) => !m.isNPC && m.character)
-          .map((m) => ({
-            id: m.character!.id,
-            health: m.character!.currentHealth || m.character!.maxHealth,
-            maxHealth: m.character!.maxHealth,
-            isPlayer: true,
-          })),
-        enemies: combatState.monsters.map((monster) => ({
-          id: monster.id.toString(),
-          health: monster.health,
-          maxHealth: monster.maxHealth || 100,
-          threat: NPCAiService.calculateThreatLevel(monster),
-        })),
-        turnNumber: combatState.turnCount,
-      };
-
-      // Get NPC AI decision
-      const npcAction = await NPCAiService.generateNPCAction(combatContext);
-
-      console.log(
-        `🤖 [CombatService] NPC ${npc.name} chose action: ${npcAction.action} - ${npcAction.reasoning}`
-      );
-
-      // Process NPC action
-      let npcResult: CombatResult;
-
-      switch (npcAction.action) {
-        case "ATTACK":
-          npcResult = await this.processNPCAttack(
-            npc,
-            npcAction,
-            combatState,
-            event
-          );
-          break;
-        case "DEFEND":
-          npcResult = await this.processNPCDefend(npc, npcAction, combatState);
-          break;
-        case "USE_ITEM":
-          npcResult = await this.processNPCUseItem(
-            npc,
-            npcAction,
-            combatState,
-            event
-          );
-          break;
-        default:
-          npcResult = {
-            success: true,
-            message: `${npc.name} waits.`,
-            damage: 0,
-            isCritical: false,
-            combatState: combatState,
-          };
-      }
-
-      npcResults.push(npcResult);
-    }
-
-    return npcResults;
-  }
-
-  /**
-   * Process NPC attack action
-   */
-  private static async processNPCAttack(
-    npc: any,
-    npcAction: any,
-    combatState: CombatState,
-    event: any
-  ): Promise<CombatResult> {
-    const targetEnemy = combatState.monsters.find(
-      (enemy) => enemy.id.toString() === npcAction.targetId
-    );
-
-    if (!targetEnemy || targetEnemy.health <= 0) {
-      return {
-        success: false,
-        message: `${npc.name} tried to attack but no valid target found.`,
-        damage: 0,
-        isCritical: false,
-        combatState: combatState,
-      };
-    }
-
-    // Calculate NPC damage
-    const baseDamage = npc.attack || 10;
-    const isCritical = Math.random() < (npc.criticalChance || 0.05);
-    const finalDamage = isCritical ? baseDamage * 2 : baseDamage;
-
-    // Apply damage to target
-    targetEnemy.health -= finalDamage;
-    combatState.playerDamageDealt += finalDamage;
-
-    const message = isCritical
-      ? `${npc.name} critically hits for ${finalDamage} damage!`
-      : `${npc.name} attacks for ${finalDamage} damage!`;
-
-    return {
-      success: true,
-      message: message,
-      damage: finalDamage,
-      isCritical: isCritical,
-      combatState: combatState,
-    };
-  }
-
-  /**
-   * Process NPC defend action
-   */
-  private static async processNPCDefend(
-    npc: any,
-    npcAction: any,
-    combatState: CombatState
-  ): Promise<CombatResult> {
-    return {
-      success: true,
-      message: `${npc.name} takes a defensive stance.`,
-      damage: 0,
-      isCritical: false,
-      combatState: combatState,
-    };
-  }
-
-  /**
-   * Process NPC use item action
-   */
-  private static async processNPCUseItem(
-    npc: any,
-    npcAction: any,
-    combatState: CombatState,
-    event: any
-  ): Promise<CombatResult> {
-    // For now, NPCs don't have items, so this is a placeholder
-    return {
-      success: true,
-      message: `${npc.name} attempts to use an item.`,
-      damage: 0,
-      isCritical: false,
-      combatState: combatState,
-    };
   }
 
   /**

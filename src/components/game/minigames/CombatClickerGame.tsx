@@ -36,6 +36,9 @@ interface CombatClickerGameProps {
     defense: number;
     agility: number;
     blockStrength: number;
+    isNPC?: boolean;
+    attackInterval?: number;
+    nextAttackTime?: number;
   }>;
   event?: {
     eventData?: {
@@ -75,6 +78,10 @@ export function CombatClickerGame({
     timeStarted: number;
     timeTaken: number;
     completionHandled: boolean;
+    npcAttackStates: Record<
+      string,
+      { isVisible: boolean; startTime?: number; duration?: number }
+    >;
   }>({
     monsters: [],
     party: [],
@@ -86,6 +93,7 @@ export function CombatClickerGame({
     timeStarted: 0,
     timeTaken: 0,
     completionHandled: false,
+    npcAttackStates: {},
   });
 
   // State for click animations
@@ -136,46 +144,12 @@ export function CombatClickerGame({
     event?.eventData?.combatState?.monsters &&
     event.eventData.combatState.monsters.length > 0;
 
-  // Simple debug log that should always show
-  console.log("🔍 SIMPLE DEBUG:", {
-    hasEvent: !!event,
-    hasEventData: !!event?.eventData,
-    hasCombatState: !!event?.eventData?.combatState,
-    hasMonsters: !!event?.eventData?.combatState?.monsters,
-    monstersLength: event?.eventData?.combatState?.monsters?.length || 0,
-    hasSavedCombatState,
-  });
-
-  // Debug saved state detection (only log when it changes)
-  useEffect(() => {
-    console.log("🎮 [CombatClickerGame] Saved state check:", {
-      hasEvent: !!event,
-      hasEventData: !!event?.eventData,
-      hasCombatState: !!event?.eventData?.combatState,
-      hasMonsters: !!event?.eventData?.combatState?.monsters,
-      monstersLength: event?.eventData?.combatState?.monsters?.length || 0,
-      hasSavedCombatState,
-      eventData: event?.eventData,
-      combatState: event?.eventData?.combatState,
-    });
-  }, [hasSavedCombatState, event?.eventData?.combatState]);
-
   // Debug query conditions
   const queryEnabled =
     !hasSavedCombatState &&
     config &&
     config.monsterTemplateIds &&
     config.monsterTemplateIds.length > 0;
-
-  useEffect(() => {
-    console.log("🎮 [CombatClickerGame] Query conditions:", {
-      hasSavedCombatState,
-      hasConfig: !!config,
-      hasTemplateIds: !!config?.monsterTemplateIds,
-      templateIdsLength: config?.monsterTemplateIds?.length || 0,
-      queryEnabled,
-    });
-  }, [hasSavedCombatState, config, queryEnabled]);
 
   // Generate monsters using tRPC only if we don't have saved state
   const {
@@ -195,54 +169,12 @@ export function CombatClickerGame({
     }
   );
 
-  // Debug monster generation results
-  useEffect(() => {
-    if (queryEnabled) {
-      console.log("🎮 [CombatClickerGame] Monster generation query results:", {
-        isLoading: monstersLoading,
-        hasData: !!monsters,
-        monstersCount: monsters?.length || 0,
-        error: monstersError,
-        queryEnabled,
-      });
-    }
-  }, [monsters, monstersLoading, monstersError, queryEnabled]);
-
-  // Debug the monster generation configuration (only log once and only if no saved state)
-  useEffect(() => {
-    if (config && config.monsterTemplateIds && !hasSavedCombatState) {
-      console.log("🎮 [CombatClickerGame] Monster generation config:", {
-        templateIds: config.monsterTemplateIds || [],
-        minMonsters: config.minMonsters || 1,
-        maxMonsters: config.maxMonsters || 3,
-        eliteChance: config.eliteChance || 0.2,
-        specialAbilityChance: config.specialAbilityChance || 0.1,
-      });
-    }
-  }, [config, hasSavedCombatState]);
-
   // Initialize combat when monsters are loaded OR when we have saved state
   useEffect(() => {
     const shouldInitialize =
       (monsters && monsters.length > 0) || hasSavedCombatState;
 
-    console.log("🎮 [CombatClickerGame] Initialization check:", {
-      shouldInitialize,
-      hasMonsters: monsters && monsters.length > 0,
-      hasSavedCombatState,
-      gameActive: gameState.gameActive,
-      monstersCount: monsters?.length || 0,
-      combatManagerExists: !!combatManager.current,
-      eventData: event?.eventData,
-      combatState: event?.eventData?.combatState,
-    });
-
     if (shouldInitialize && !gameState.gameActive && !combatManager.current) {
-      console.log(
-        "🎮 [CombatClickerGame] Initializing combat with monsters:",
-        monsters || "saved state"
-      );
-
       // Create combat manager
       combatManager.current = new CombatStateManager();
 
@@ -257,9 +189,10 @@ export function CombatClickerGame({
         agility: member.agility || 5,
         blockStrength: member.blockStrength || 3,
         isDead: member.currentHealth <= 0,
+        isNPC: member.isNPC,
+        attackInterval: member.attackInterval,
+        nextAttackTime: member.nextAttackTime,
       }));
-
-      console.log("🎮 [CombatClickerGame] Combat party:", combatParty);
 
       // Initialize combat
       combatManager.current.initializeCombat(combatParty, {
@@ -274,28 +207,18 @@ export function CombatClickerGame({
       let enhancedMonsters: EnhancedMonster[];
 
       if (hasSavedCombatState) {
-        console.log(
-          "🔄 [CombatClickerGame] Using saved monsters from combat state"
-        );
-        enhancedMonsters = event.eventData.combatState.monsters;
+        enhancedMonsters = event.eventData?.combatState?.monsters || [];
       } else {
-        console.log("🎮 [CombatClickerGame] Using newly generated monsters");
-        enhancedMonsters = monsters.map((monster) => ({
+        enhancedMonsters = (monsters || []).map((monster) => ({
           ...monster,
           rarity: monster.rarity as "COMMON" | "ELITE" | "RARE" | "BOSS",
           description: monster.description || undefined,
         }));
       }
-
-      console.log(
-        "🎮 [CombatClickerGame] Enhanced monsters:",
-        enhancedMonsters
-      );
       combatManager.current.setMonsters(enhancedMonsters);
 
       // Restore previous combat state if exists
       if (event?.eventData?.combatState) {
-        console.log("🔄 [CombatClickerGame] Restoring previous combat state");
         combatManager.current.restoreState(event.eventData.combatState);
       }
 
@@ -312,7 +235,6 @@ export function CombatClickerGame({
         timeStarted: initialState.gameStartTime,
       }));
 
-      // Clear any scheduled attacks when starting a new game
       scheduledAttacks.current.clear();
     }
   }, [
@@ -342,51 +264,6 @@ export function CombatClickerGame({
     };
   }, [gameState.gameActive, gameState.gameOver]);
 
-  // Game completion check - DISABLED (using immediate check instead)
-  // useEffect(() => {
-  //   if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
-  //     return;
-
-  //   const checkGameCompletion = () => {
-  //     const gameEnd = combatManager.current?.checkGameEnd();
-  //     if (gameEnd?.isOver) {
-  //       console.log("🎮 [CombatClickerGame] Game completed:", gameEnd);
-  //       console.log("🎮 [CombatClickerGame] Alive monsters:", gameState.monsters.filter(m => m.health > 0).length);
-  //       console.log("🎮 [CombatClickerGame] Alive party members:", gameState.party.filter(p => !p.isDead).length);
-
-  //       // Get final combat result
-  //       const combatResult = combatManager.current?.getCombatResult();
-  //       console.log("🎮 [CombatClickerGame] Combat result:", combatResult);
-
-  //       // Update game state to show game over screen
-  //       setGameState((prev) => ({
-  //         ...prev,
-  //         gameOver: true,
-  //         victory: gameEnd.victory,
-  //       }));
-
-  //       // Call onComplete callback after a short delay to show the game over screen
-  //       setTimeout(() => {
-  //         if (combatResult) {
-  //           console.log(
-  //             "🎮 [CombatClickerGame] Calling onComplete with result:",
-  //             combatResult
-  //           );
-  //           onComplete(combatResult);
-  //         }
-  //       }, 2000); // Show game over screen for 2 seconds before completing
-  //     }
-  //   };
-
-  //   // Check for completion every 500ms
-  //   const completionCheckInterval = setInterval(checkGameCompletion, 500);
-
-  //   return () => {
-  //     clearInterval(completionCheckInterval);
-  //   };
-  // }, [gameState.gameActive, gameState.gameOver, onComplete]);
-
-  // Monster attack timer
   useEffect(() => {
     if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
       return;
@@ -402,45 +279,98 @@ export function CombatClickerGame({
           now >= monster.nextAttackTime &&
           !scheduledAttacks.current.has(monster.id)
         ) {
-          console.log(`🎯 Monster ${monster.name} attacking:`, {
-            attackSpeed: monster.attackInterval,
-            timeUntilAttack: monster.nextAttackTime - now,
-            nextAttackTime: new Date(
-              monster.nextAttackTime
-            ).toLocaleTimeString(),
-          });
-
-          // Mark this monster as having a scheduled attack
           scheduledAttacks.current.add(monster.id);
 
-          // Show block button 2 seconds before attack
           combatManager.current?.showBlockButton(monster.id);
 
-          // Schedule the actual attack
           const attackTimeout = setTimeout(() => {
             // Check if monster is still alive before attacking
             const currentMonster = gameState.monsters.find(
               (m) => m.id === monster.id
             );
             if (!currentMonster || currentMonster.health <= 0) {
-              console.log(
-                `💀 Monster ${monster.name} died before attack could be performed, cancelling attack`
-              );
               scheduledAttacks.current.delete(monster.id);
               attackTimeouts.current.delete(monster.id);
               return;
             }
 
             performMonsterAttack(monster.id);
-            // Set next attack time AFTER the attack is performed
             combatManager.current?.setNextAttackTime(monster.id);
-            // Remove from scheduled attacks after attack is performed
             scheduledAttacks.current.delete(monster.id);
             attackTimeouts.current.delete(monster.id);
           }, 2000);
 
-          // Store the timeout ID so it can be cancelled if monster dies
           attackTimeouts.current.set(monster.id, attackTimeout);
+        }
+      });
+
+      // Check NPC attacks
+      const aliveNPCs = gameState.party.filter(
+        (member) =>
+          member.isNPC &&
+          !member.isDead &&
+          member.attackInterval &&
+          member.nextAttackTime
+      );
+
+      aliveNPCs.forEach((npc) => {
+        if (
+          now >= npc.nextAttackTime! &&
+          !scheduledAttacks.current.has(`npc-${npc.id}`)
+        ) {
+          // Mark this NPC as having a scheduled attack
+          scheduledAttacks.current.add(`npc-${npc.id}`);
+
+          // Show weapon swing timer 1 second before attack
+          setGameState((prev) => ({
+            ...prev,
+            npcAttackStates: {
+              ...prev.npcAttackStates,
+              [npc.id]: {
+                isVisible: true,
+                startTime: now,
+                duration: 1000, // 1 second timer
+              },
+            },
+          }));
+
+          // Schedule the actual attack
+          const attackTimeout = setTimeout(() => {
+            // Check if NPC is still alive before attacking
+            const currentNPC = gameState.party.find((m) => m.id === npc.id);
+            if (!currentNPC || currentNPC.isDead) {
+              scheduledAttacks.current.delete(`npc-${npc.id}`);
+              attackTimeouts.current.delete(`npc-${npc.id}`);
+              // Hide weapon swing timer
+              setGameState((prev) => ({
+                ...prev,
+                npcAttackStates: {
+                  ...prev.npcAttackStates,
+                  [npc.id]: { isVisible: false },
+                },
+              }));
+              return;
+            }
+
+            performNPCAttack(npc.id);
+            // Set next attack time AFTER the attack is performed
+            setNextNPCAttackTime(npc.id);
+            // Remove from scheduled attacks after attack is performed
+            scheduledAttacks.current.delete(`npc-${npc.id}`);
+            attackTimeouts.current.delete(`npc-${npc.id}`);
+
+            // Hide weapon swing timer after attack
+            setGameState((prev) => ({
+              ...prev,
+              npcAttackStates: {
+                ...prev.npcAttackStates,
+                [npc.id]: { isVisible: false },
+              },
+            }));
+          }, 1000); // NPCs attack faster than monsters (1 second vs 2 seconds)
+
+          // Store the timeout ID so it can be cancelled if NPC dies
+          attackTimeouts.current.set(`npc-${npc.id}`, attackTimeout);
         }
       });
     };
@@ -511,7 +441,7 @@ export function CombatClickerGame({
       const updatedTarget = updatedParty.find(
         (member) => member.id === target.id
       );
-      if (updatedTarget) {
+      if (updatedTarget && !updatedTarget.isNPC) {
         updateCharacterHealth.mutate({
           characterId: target.id,
           newHealth: updatedTarget.currentHealth,
@@ -535,25 +465,53 @@ export function CombatClickerGame({
     }));
   };
 
-  // Function to check if combat is over and complete the minigame
-  const checkGameEnd = () => {
+  const performNPCAttack = (npcId: string) => {
     if (!combatManager.current) return;
 
-    const gameEndResult = combatManager.current.checkGameEnd();
-    if (gameEndResult.isOver) {
-      console.log("🎮 [CombatClickerGame] Combat ended:", {
-        victory: gameEndResult.victory,
-        isOver: gameEndResult.isOver,
-      });
+    const npc = gameState.party.find((m) => m.id === npcId && m.isNPC);
+    if (!npc || npc.isDead) return;
 
-      // Get final combat result
-      const finalResult = combatManager.current.getCombatResult();
+    // Find a random alive monster to attack
+    const aliveMonsters = gameState.monsters.filter((m) => m.health > 0);
+    if (aliveMonsters.length === 0) return;
 
-      // Don't complete the minigame here - let the useEffect handle it with monster data
-      console.log(
-        "🎮 [CombatClickerGame] Combat ended, waiting for useEffect to complete with monster data"
-      );
-    }
+    // Simple AI: Target lowest health enemy, or random if tied
+    const targetMonster = aliveMonsters.reduce((lowest, current) => {
+      return current.health < lowest.health ? current : lowest;
+    });
+
+    // Use the combat manager to process the attack (this persists the damage)
+    combatManager.current.processPartyAttack(npcId, targetMonster.id);
+
+    // Update state from combat manager
+    const newState = combatManager.current.getState();
+    setGameState((prev) => ({
+      ...prev,
+      monsters: newState.monsters,
+      party: newState.party,
+      blockStates: newState.blockStates,
+      damageLog: newState.damageLog,
+    }));
+  };
+
+  const setNextNPCAttackTime = (npcId: string) => {
+    const npc = gameState.party.find((m) => m.id === npcId && m.isNPC);
+    if (!npc || !npc.attackInterval) return;
+
+    const nextAttackTime = Date.now() + npc.attackInterval * 1000;
+
+    setGameState((prev) => ({
+      ...prev,
+      party: prev.party.map((member) => {
+        if (member.id === npcId && member.isNPC) {
+          return {
+            ...member,
+            nextAttackTime: nextAttackTime,
+          };
+        }
+        return member;
+      }),
+    }));
   };
 
   // Function to cancel scheduled attacks for dead monsters
@@ -584,13 +542,6 @@ export function CombatClickerGame({
     const combatState = combatManager.current.getState();
     const combatResult = combatManager.current.getCombatResult();
 
-    console.log("💾 [CombatClickerGame] Saving combat state:", {
-      monsters: combatState.monsters.length,
-      turnCount: combatState.turnCount,
-      damageDealt: combatResult.damageDealt,
-      monstersDefeated: combatResult.monstersDefeated,
-    });
-
     // Send combat state update to backend (silent, no action logging)
     submitAction("COMBAT_STATE_UPDATE", {
       combatState: {
@@ -605,40 +556,21 @@ export function CombatClickerGame({
   };
 
   const handleMonsterClick = (monsterId: string, event: React.MouseEvent) => {
-    console.log("🎮 [CombatClickerGame] handleMonsterClick called:", {
-      monsterId,
-      gameActive: gameState.gameActive,
-      gameOver: gameState.gameOver,
-      combatManagerExists: !!combatManager.current,
-    });
-
     if (!gameState.gameActive || gameState.gameOver || !combatManager.current) {
-      console.log(
-        "🎮 [CombatClickerGame] Early return from handleMonsterClick"
-      );
       return;
     }
 
-    const currentPlayer = gameState.party[0];
+    // Find the actual player character (not NPC) who should be attacking
+    const currentPlayer = gameState.party.find((member) => !member.isNPC);
     if (!currentPlayer || currentPlayer.isDead) {
-      console.log("🎮 [CombatClickerGame] No valid player for attack");
       return;
     }
-
-    console.log("🎮 [CombatClickerGame] Monster clicked:", {
-      monsterId,
-      playerId: currentPlayer.id,
-      playerName: currentPlayer.name,
-      combatManagerExists: !!combatManager.current,
-    });
 
     // Process attack
     const result = combatManager.current.processPartyAttack(
       currentPlayer.id,
       monsterId
     );
-
-    console.log("🎮 [CombatClickerGame] Attack result:", result);
 
     // Trigger click animation with damage number
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -678,27 +610,6 @@ export function CombatClickerGame({
 
     // Save combat state after each attack (silently, no action logging)
     saveCombatState();
-  };
-
-  const handleBlockClick = (monsterId: string) => {
-    if (!gameState.gameActive || gameState.gameOver || !combatManager.current)
-      return;
-
-    const blockState = gameState.blockStates[monsterId];
-    if (!blockState || !blockState.isVisible) return;
-
-    const clickTime = Date.now();
-
-    // Register the block attempt in the combat manager
-    // This will store the block status for the upcoming attack
-    combatManager.current.registerBlockAttempt(monsterId, clickTime);
-
-    // Update UI state
-    const newState = combatManager.current.getState();
-    setGameState((prev) => ({
-      ...prev,
-      blockStates: newState.blockStates,
-    }));
   };
 
   const handleMonsterRightClick = (
@@ -744,17 +655,8 @@ export function CombatClickerGame({
       return;
 
     const { isOver, victory } = combatManager.current.checkGameEnd();
-    console.log("🎮 [CombatClickerGame] Win/lose check:", {
-      isOver,
-      victory,
-      monsters: gameState.monsters.length,
-      party: gameState.party.length,
-    });
 
     if (isOver) {
-      console.log(
-        "🎮 [CombatClickerGame] Setting game over from win/lose check"
-      );
       setGameState((prev) => ({
         ...prev,
         gameOver: true,
@@ -776,29 +678,13 @@ export function CombatClickerGame({
       !gameState.completionHandled &&
       combatManager.current
     ) {
-      console.log(
-        "🎮 [CombatClickerGame] Game over detected, getting combat result"
-      );
-
       // Mark as handled to prevent double calls
       setGameState((prev) => ({ ...prev, completionHandled: true }));
 
       const result = combatManager.current.getCombatResult();
-      console.log("🎮 [CombatClickerGame] Final combat result:", result);
 
       // Add delay to show game over screen before completing
       setTimeout(() => {
-        console.log(
-          "🎮 [CombatClickerGame] Calling onComplete with result:",
-          result
-        );
-        console.log("🎮 [CombatClickerGame] Result details:", {
-          victory: result.victory,
-          monstersDefeated: result.monstersDefeated,
-          totalClicks: result.totalClicks,
-          damageDealt: result.damageDealt,
-        });
-
         // Include monster data for loot generation
         const resultWithMonsters = {
           ...result,
@@ -811,17 +697,6 @@ export function CombatClickerGame({
             rarity: m.rarity,
           })),
         };
-
-        console.log("🎮 [CombatClickerGame] Result with monsters:", {
-          monstersCount: resultWithMonsters.monsters.length,
-          monsters: resultWithMonsters.monsters.map((m) => ({
-            id: m.id,
-            name: m.name,
-            health: m.health,
-            templateId: m.templateId,
-            rarity: m.rarity,
-          })),
-        });
 
         onComplete(resultWithMonsters);
       }, 2000); // Show game over screen for 2 seconds before completing
@@ -952,9 +827,16 @@ export function CombatClickerGame({
                   }`}
                 >
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-white font-medium">
-                      {member.name}
-                    </span>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-white font-medium">
+                        {member.name}
+                      </span>
+                      {member.isNPC && (
+                        <span className="px-2 py-1 text-xs bg-blue-600 text-white rounded">
+                          NPC
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center space-x-1">
                       <Heart className="h-4 w-4 text-red-400" />
                       <span className="text-sm text-gray-300">
@@ -978,6 +860,33 @@ export function CombatClickerGame({
                       }}
                     />
                   </div>
+
+                  {/* NPC Weapon Swing Timer */}
+                  {member.isNPC &&
+                    gameState.npcAttackStates[member.id]?.isVisible &&
+                    gameState.npcAttackStates[member.id]?.startTime &&
+                    gameState.npcAttackStates[member.id]?.duration && (
+                      <div className="w-full bg-gray-700 rounded-full h-1 mb-2">
+                        <div
+                          className="h-1 rounded-full bg-orange-500 transition-all duration-100"
+                          style={{
+                            width: `${Math.max(
+                              0,
+                              Math.min(
+                                100,
+                                ((Date.now() -
+                                  gameState.npcAttackStates[member.id]
+                                    .startTime!) /
+                                  gameState.npcAttackStates[member.id]
+                                    .duration!) *
+                                  100
+                              )
+                            )}%`,
+                          }}
+                        />
+                      </div>
+                    )}
+
                   {member.isDead && (
                     <button
                       onClick={() => handleReviveClick(member.id)}

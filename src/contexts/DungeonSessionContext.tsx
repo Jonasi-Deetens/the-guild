@@ -180,30 +180,9 @@ export function DungeonSessionProvider({
   const currentEvent = useMemo(() => {
     if (!session) return null;
 
-    console.log("🔍 [DungeonSessionContext] Finding current event:", {
-      currentEventId: session.currentEventId,
-      eventsCount: session.events.length,
-      events: session.events.map((e) => ({
-        id: e.id,
-        status: e.status,
-        type: e.template?.type,
-      })),
-    });
-
     const found = session.events.find(
       (event) =>
         event.id === session.currentEventId && event.status === "ACTIVE"
-    );
-
-    console.log(
-      "🔍 [DungeonSessionContext] Current event found:",
-      found
-        ? {
-            id: found.id,
-            status: found.status,
-            type: found.template?.type,
-          }
-        : null
     );
 
     return found || null;
@@ -255,16 +234,48 @@ export function DungeonSessionProvider({
         .map((member) => {
           // Handle NPCs
           if (member.isNPC && member.npcCompanion) {
+            // Check if there's an active combat event with health updates
+            let currentHealth = member.npcCompanion.maxHealth; // Default to full health
+            let isDead = false;
+
+            if (session.currentEventId) {
+              // Look for health updates in the current event's combat state
+              const eventData = session.currentEvent?.eventData;
+              if (eventData?.combatState?.partyHealthUpdates) {
+                const healthUpdate =
+                  eventData.combatState.partyHealthUpdates[
+                    member.npcCompanion.id
+                  ];
+                if (healthUpdate !== undefined) {
+                  currentHealth = Math.max(
+                    0,
+                    member.npcCompanion.maxHealth + healthUpdate
+                  );
+                  isDead = currentHealth <= 0;
+                }
+              }
+            }
+
+            // Calculate attack interval based on speed (faster speed = shorter interval)
+            const baseAttackInterval = 6.0; // Base 6 seconds (even slower)
+            const speedFactor = Math.max(
+              0.8, // Minimum 0.8x speed (slower)
+              Math.min(1.3, member.npcCompanion.speed / 20) // Speed 20 = 1.0x, speed 26 = 1.3x
+            );
+            const attackInterval = baseAttackInterval / speedFactor;
+
             return {
               id: member.npcCompanion.id,
               name: member.npcCompanion.name,
-              currentHealth: member.npcCompanion.maxHealth, // NPCs start at full health
+              currentHealth: currentHealth,
               maxHealth: member.npcCompanion.maxHealth,
               attack: member.npcCompanion.attack,
               defense: member.npcCompanion.defense,
               level: member.npcCompanion.level,
-              isDead: false, // NPCs start alive
+              isDead: isDead,
               isNPC: true,
+              attackInterval: attackInterval,
+              nextAttackTime: Date.now() + attackInterval * 1000 * 0.5, // Start attacking after half their attack interval
             };
           }
 
@@ -362,7 +373,6 @@ export function DungeonSessionProvider({
 
     submitActionMutation.mutate({
       sessionId,
-      eventId: currentEvent.id,
       action,
       actionData,
     });

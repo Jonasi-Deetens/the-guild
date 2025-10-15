@@ -201,6 +201,754 @@ async function main() {
         defeat: { experience: 3, gold: 0 },
       },
     },
+
+    // BANDIT CAMP EVENTS (Difficulty 1)
+    {
+      type: "COMBAT",
+      name: "Bandit Patrol",
+      description:
+        "A small patrol of bandits blocks your path through the camp.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 90,
+        environments: ["road", "forest", "camp"],
+        enemyTypes: ["bandit"],
+        minEnemies: 2,
+        maxEnemies: 3,
+        monsterTemplateIds: [], // Will be populated dynamically
+        minMonsters: 2,
+        maxMonsters: 3,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 25, gold: 60 },
+        defeat: { experience: 8, gold: 0 },
+        flee: { experience: 12, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Bandit Ambush",
+      description: "Bandits spring an ambush from the surrounding trees!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 100,
+        environments: ["forest", "road"],
+        enemyTypes: ["bandit"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.1,
+        specialAbilityChance: 0.05,
+      },
+      outcomes: {
+        victory: { experience: 30, gold: 80 },
+        defeat: { experience: 10, gold: 0 },
+        flee: { experience: 15, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Enforcer Encounter",
+      description: "A dangerous bandit enforcer challenges you to combat!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 110,
+        environments: ["camp", "road"],
+        enemyTypes: ["bandit"],
+        minEnemies: 2,
+        maxEnemies: 3,
+        monsterTemplateIds: [],
+        minMonsters: 2,
+        maxMonsters: 3,
+        eliteChance: 0.5,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 35, gold: 100 },
+        defeat: { experience: 12, gold: 0 },
+        flee: { experience: 18, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Camp Guard",
+      description:
+        "The bandit camp's guards stand ready to defend their territory.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["camp"],
+        enemyTypes: ["bandit"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.2,
+        specialAbilityChance: 0.05,
+      },
+      outcomes: {
+        victory: { experience: 40, gold: 120 },
+        defeat: { experience: 15, gold: 0 },
+        flee: { experience: 20, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Bandit Captain",
+      description:
+        "The Bandit Captain emerges to personally deal with the intruders!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["camp"],
+        enemyTypes: ["bandit"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 60, gold: 200 },
+        defeat: { experience: 20, gold: 0 },
+        flee: { experience: 30, gold: 0 },
+      },
+    },
+
+    // SLIME DEN EVENTS (Difficulty 1)
+    {
+      type: "COMBAT",
+      name: "Slime Cluster",
+      description: "A cluster of blue slimes blocks your path through the den.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 80,
+        environments: ["cave", "den"],
+        enemyTypes: ["slime"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 20, gold: 40 },
+        defeat: { experience: 6, gold: 0 },
+        flee: { experience: 10, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Slime Variety",
+      description:
+        "Different colored slimes have gathered in this area of the den.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 100,
+        environments: ["cave", "den"],
+        enemyTypes: ["slime"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.25,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 30, gold: 60 },
+        defeat: { experience: 10, gold: 0 },
+        flee: { experience: 15, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Healing Slimes",
+      description:
+        "Green slimes with healing abilities guard this section of the den.",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 110,
+        environments: ["cave", "den"],
+        enemyTypes: ["slime"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.1,
+        specialAbilityChance: 0.2,
+      },
+      outcomes: {
+        victory: { experience: 35, gold: 70 },
+        defeat: { experience: 12, gold: 0 },
+        flee: { experience: 18, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Elite Slime",
+      description:
+        "A dangerous red slime with explosive abilities blocks your way!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["cave", "den"],
+        enemyTypes: ["slime"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.5,
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 40, gold: 80 },
+        defeat: { experience: 15, gold: 0 },
+        flee: { experience: 20, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Slime King",
+      description: "The massive Slime King emerges from the depths of the den!",
+      difficulty: 1,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["cave", "den"],
+        enemyTypes: ["slime"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.4,
+      },
+      outcomes: {
+        victory: { experience: 60, gold: 150 },
+        defeat: { experience: 20, gold: 0 },
+        flee: { experience: 30, gold: 0 },
+      },
+    },
+
+    // GOBLIN CAVE EVENTS (Difficulty 2)
+    {
+      type: "COMBAT",
+      name: "Goblin Raiders",
+      description: "A group of goblin raiders attacks from the cave shadows!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 100,
+        environments: ["cave", "tunnel"],
+        enemyTypes: ["goblin"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.1,
+        specialAbilityChance: 0.05,
+      },
+      outcomes: {
+        victory: { experience: 40, gold: 80 },
+        defeat: { experience: 12, gold: 0 },
+        flee: { experience: 20, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Goblin Ambush",
+      description: "Sneaky goblin rogues ambush you from the cave walls!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 110,
+        environments: ["cave", "tunnel"],
+        enemyTypes: ["goblin"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.2,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 50, gold: 100 },
+        defeat: { experience: 15, gold: 0 },
+        flee: { experience: 25, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Goblin War Party",
+      description:
+        "A full goblin war party with shaman support blocks your path!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 130,
+        environments: ["cave", "chamber"],
+        enemyTypes: ["goblin"],
+        minEnemies: 5,
+        maxEnemies: 6,
+        monsterTemplateIds: [],
+        minMonsters: 5,
+        maxMonsters: 6,
+        eliteChance: 0.2,
+        specialAbilityChance: 0.15,
+      },
+      outcomes: {
+        victory: { experience: 60, gold: 120 },
+        defeat: { experience: 18, gold: 0 },
+        flee: { experience: 30, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Hobgoblin Squad",
+      description:
+        "A disciplined squad of hobgoblins guards this area of the cave.",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["cave", "chamber"],
+        enemyTypes: ["goblin"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.6,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 55, gold: 110 },
+        defeat: { experience: 16, gold: 0 },
+        flee: { experience: 28, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Goblin Warlord",
+      description: "The Goblin Warlord emerges to personally lead the defense!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["cave", "chamber"],
+        enemyTypes: ["goblin"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 80, gold: 200 },
+        defeat: { experience: 25, gold: 0 },
+        flee: { experience: 40, gold: 0 },
+      },
+    },
+
+    // WOLF PACK EVENTS (Difficulty 2)
+    {
+      type: "COMBAT",
+      name: "Young Pack",
+      description:
+        "A pack of young wolves circles around you, testing your resolve.",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 90,
+        environments: ["forest", "clearing"],
+        enemyTypes: ["wolf"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 35, gold: 70 },
+        defeat: { experience: 10, gold: 0 },
+        flee: { experience: 18, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Dire Wolves",
+      description: "Large dire wolves emerge from the forest shadows!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 110,
+        environments: ["forest", "clearing"],
+        enemyTypes: ["wolf"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.2,
+        specialAbilityChance: 0.05,
+      },
+      outcomes: {
+        victory: { experience: 45, gold: 90 },
+        defeat: { experience: 14, gold: 0 },
+        flee: { experience: 23, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Alpha's Pack",
+      description: "An alpha wolf leads its pack in a coordinated attack!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["forest", "clearing"],
+        enemyTypes: ["wolf"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.5,
+        specialAbilityChance: 0.15,
+      },
+      outcomes: {
+        victory: { experience: 55, gold: 110 },
+        defeat: { experience: 16, gold: 0 },
+        flee: { experience: 28, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Mixed Pack",
+      description:
+        "A mixed pack of wolves with different abilities attacks together!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 130,
+        environments: ["forest", "clearing"],
+        enemyTypes: ["wolf"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.3,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 60, gold: 120 },
+        defeat: { experience: 18, gold: 0 },
+        flee: { experience: 30, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Werewolf",
+      description:
+        "A powerful werewolf emerges from the shadows, its eyes glowing with rage!",
+      difficulty: 2,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["forest", "clearing"],
+        enemyTypes: ["wolf"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.4,
+      },
+      outcomes: {
+        victory: { experience: 80, gold: 180 },
+        defeat: { experience: 25, gold: 0 },
+        flee: { experience: 40, gold: 0 },
+      },
+    },
+
+    // HAUNTED FOREST EVENTS (Difficulty 3)
+    {
+      type: "COMBAT",
+      name: "Wandering Spirits",
+      description:
+        "Lost spirits drift through the haunted forest, drawn to your life force.",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 100,
+        environments: ["forest", "haunted"],
+        enemyTypes: ["spirit"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0,
+        specialAbilityChance: 0,
+      },
+      outcomes: {
+        victory: { experience: 50, gold: 100 },
+        defeat: { experience: 15, gold: 0 },
+        flee: { experience: 25, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Wraith Attack",
+      description: "Fast-moving wraiths phase through the trees to attack!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["forest", "haunted"],
+        enemyTypes: ["spirit"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.4,
+        specialAbilityChance: 0.2,
+      },
+      outcomes: {
+        victory: { experience: 65, gold: 130 },
+        defeat: { experience: 20, gold: 0 },
+        flee: { experience: 33, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Poltergeist Chaos",
+      description:
+        "A chaotic poltergeist creates havoc with its unpredictable magic!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 130,
+        environments: ["forest", "haunted"],
+        enemyTypes: ["spirit"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.5,
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 70, gold: 140 },
+        defeat: { experience: 22, gold: 0 },
+        flee: { experience: 35, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Spirit Horde",
+      description: "A horde of spirits converges on your location!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 140,
+        environments: ["forest", "haunted"],
+        enemyTypes: ["spirit"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.3,
+        specialAbilityChance: 0.15,
+      },
+      outcomes: {
+        victory: { experience: 75, gold: 150 },
+        defeat: { experience: 25, gold: 0 },
+        flee: { experience: 38, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Banshee",
+      description:
+        "A terrifying banshee's wail echoes through the haunted forest!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["forest", "haunted"],
+        enemyTypes: ["spirit"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.4,
+      },
+      outcomes: {
+        victory: { experience: 100, gold: 250 },
+        defeat: { experience: 30, gold: 0 },
+        flee: { experience: 50, gold: 0 },
+      },
+    },
+
+    // ABANDONED MINE EVENTS (Difficulty 3)
+    {
+      type: "COMBAT",
+      name: "Spider Nest",
+      description: "Venomous cave spiders have made their nest in this tunnel!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 100,
+        environments: ["cave", "mine"],
+        enemyTypes: ["spider", "miner"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 50, gold: 100 },
+        defeat: { experience: 15, gold: 0 },
+        flee: { experience: 25, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Corrupted Workers",
+      description: "The spirits of corrupted miners still haunt these tunnels!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 110,
+        environments: ["cave", "mine"],
+        enemyTypes: ["miner"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.1,
+        specialAbilityChance: 0.05,
+      },
+      outcomes: {
+        victory: { experience: 55, gold: 110 },
+        defeat: { experience: 16, gold: 0 },
+        flee: { experience: 28, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Dark Ambush",
+      description:
+        "Dark dwellers ambush you from the deepest shadows of the mine!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 120,
+        environments: ["cave", "mine"],
+        enemyTypes: ["spider", "dweller"],
+        minEnemies: 3,
+        maxEnemies: 4,
+        monsterTemplateIds: [],
+        minMonsters: 3,
+        maxMonsters: 4,
+        eliteChance: 0.4,
+        specialAbilityChance: 0.2,
+      },
+      outcomes: {
+        victory: { experience: 65, gold: 130 },
+        defeat: { experience: 20, gold: 0 },
+        flee: { experience: 33, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Mine Patrol",
+      description: "A mixed patrol of mine creatures guards this section!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 130,
+        environments: ["cave", "mine"],
+        enemyTypes: ["spider", "miner"],
+        minEnemies: 4,
+        maxEnemies: 5,
+        monsterTemplateIds: [],
+        minMonsters: 4,
+        maxMonsters: 5,
+        eliteChance: 0.2,
+        specialAbilityChance: 0.1,
+      },
+      outcomes: {
+        victory: { experience: 70, gold: 140 },
+        defeat: { experience: 22, gold: 0 },
+        flee: { experience: 35, gold: 0 },
+      },
+    },
+    {
+      type: "COMBAT",
+      name: "Mine Horror",
+      description:
+        "An ancient horror emerges from the deepest depths of the mine!",
+      difficulty: 3,
+      minigameType: "COMBAT_CLICKER",
+      config: {
+        timeLimit: 150,
+        environments: ["cave", "mine"],
+        enemyTypes: ["spider", "miner", "dweller"],
+        minEnemies: 5,
+        maxEnemies: 6,
+        monsterTemplateIds: [],
+        minMonsters: 5,
+        maxMonsters: 6,
+        eliteChance: 1.0, // Always spawns the boss
+        specialAbilityChance: 0.3,
+      },
+      outcomes: {
+        victory: { experience: 100, gold: 250 },
+        defeat: { experience: 30, gold: 0 },
+        flee: { experience: 50, gold: 0 },
+      },
+    },
   ];
 
   // Treasure Event Templates
@@ -643,7 +1391,7 @@ async function main() {
     });
 
     // Populate monster template IDs dynamically based on template name
-    let templateData = { ...template };
+    const templateData = { ...template };
 
     if (template.name === "Goblin Ambush") {
       const goblinWarrior = await prisma.monsterTemplate.findFirst({
@@ -726,6 +1474,385 @@ async function main() {
       });
       if (dragon && "monsterTemplateIds" in templateData.config) {
         templateData.config.monsterTemplateIds = [dragon.id];
+      }
+    }
+
+    // BANDIT CAMP EVENTS
+    else if (template.name === "Bandit Patrol") {
+      const banditThug = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Thug" },
+      });
+      if (banditThug && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [banditThug.id];
+      }
+    } else if (template.name === "Bandit Ambush") {
+      const banditThug = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Thug" },
+      });
+      const banditCrossbowman = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Crossbowman" },
+      });
+      const ids = [];
+      if (banditThug) ids.push(banditThug.id);
+      if (banditCrossbowman) ids.push(banditCrossbowman.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Enforcer Encounter") {
+      const banditEnforcer = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Enforcer" },
+      });
+      const banditThug = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Thug" },
+      });
+      const ids = [];
+      if (banditEnforcer) ids.push(banditEnforcer.id);
+      if (banditThug) ids.push(banditThug.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Camp Guard") {
+      const banditThug = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Thug" },
+      });
+      const banditCrossbowman = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Crossbowman" },
+      });
+      const ids = [];
+      if (banditThug) ids.push(banditThug.id);
+      if (banditCrossbowman) ids.push(banditCrossbowman.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Bandit Captain") {
+      const banditCaptain = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Captain" },
+      });
+      const banditThug = await prisma.monsterTemplate.findFirst({
+        where: { name: "Bandit Thug" },
+      });
+      const ids = [];
+      if (banditCaptain) ids.push(banditCaptain.id);
+      if (banditThug) ids.push(banditThug.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    }
+
+    // SLIME DEN EVENTS
+    else if (template.name === "Slime Cluster") {
+      const blueSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Blue Slime" },
+      });
+      if (blueSlime && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [blueSlime.id];
+      }
+    } else if (template.name === "Slime Variety") {
+      const blueSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Blue Slime" },
+      });
+      const greenSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Green Slime" },
+      });
+      const redSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Red Slime" },
+      });
+      const ids = [];
+      if (blueSlime) ids.push(blueSlime.id);
+      if (greenSlime) ids.push(greenSlime.id);
+      if (redSlime) ids.push(redSlime.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Healing Slimes") {
+      const blueSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Blue Slime" },
+      });
+      const greenSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Green Slime" },
+      });
+      const ids = [];
+      if (blueSlime) ids.push(blueSlime.id);
+      if (greenSlime) ids.push(greenSlime.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Elite Slime") {
+      const redSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Red Slime" },
+      });
+      const blueSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Blue Slime" },
+      });
+      const ids = [];
+      if (redSlime) ids.push(redSlime.id);
+      if (blueSlime) ids.push(blueSlime.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Slime King") {
+      const slimeKing = await prisma.monsterTemplate.findFirst({
+        where: { name: "Slime King" },
+      });
+      const blueSlime = await prisma.monsterTemplate.findFirst({
+        where: { name: "Blue Slime" },
+      });
+      const ids = [];
+      if (slimeKing) ids.push(slimeKing.id);
+      if (blueSlime) ids.push(blueSlime.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    }
+
+    // GOBLIN CAVE EVENTS
+    else if (template.name === "Goblin Raiders") {
+      const goblinWarrior = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Warrior" },
+      });
+      const goblinArcher = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Archer" },
+      });
+      const ids = [];
+      if (goblinWarrior) ids.push(goblinWarrior.id);
+      if (goblinArcher) ids.push(goblinArcher.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Goblin War Party") {
+      const goblinWarrior = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Warrior" },
+      });
+      const goblinArcher = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Archer" },
+      });
+      const goblinShaman = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Shaman" },
+      });
+      const ids = [];
+      if (goblinWarrior) ids.push(goblinWarrior.id);
+      if (goblinArcher) ids.push(goblinArcher.id);
+      if (goblinShaman) ids.push(goblinShaman.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Hobgoblin Squad") {
+      const hobgoblin = await prisma.monsterTemplate.findFirst({
+        where: { name: "Hobgoblin" },
+      });
+      const goblinWarrior = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Warrior" },
+      });
+      const ids = [];
+      if (hobgoblin) ids.push(hobgoblin.id);
+      if (goblinWarrior) ids.push(goblinWarrior.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Goblin Warlord") {
+      const goblinWarlord = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Warlord" },
+      });
+      const hobgoblin = await prisma.monsterTemplate.findFirst({
+        where: { name: "Hobgoblin" },
+      });
+      const goblinShaman = await prisma.monsterTemplate.findFirst({
+        where: { name: "Goblin Shaman" },
+      });
+      const ids = [];
+      if (goblinWarlord) ids.push(goblinWarlord.id);
+      if (hobgoblin) ids.push(hobgoblin.id);
+      if (goblinShaman) ids.push(goblinShaman.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    }
+
+    // WOLF PACK EVENTS
+    else if (template.name === "Young Pack") {
+      const youngWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Young Wolf" },
+      });
+      if (youngWolf && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [youngWolf.id];
+      }
+    } else if (template.name === "Dire Wolves") {
+      const direWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dire Wolf" },
+      });
+      const youngWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Young Wolf" },
+      });
+      const ids = [];
+      if (direWolf) ids.push(direWolf.id);
+      if (youngWolf) ids.push(youngWolf.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Alpha's Pack") {
+      const alphaWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Alpha Wolf" },
+      });
+      const direWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dire Wolf" },
+      });
+      const ids = [];
+      if (alphaWolf) ids.push(alphaWolf.id);
+      if (direWolf) ids.push(direWolf.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Mixed Pack") {
+      const direWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dire Wolf" },
+      });
+      const youngWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Young Wolf" },
+      });
+      const ids = [];
+      if (direWolf) ids.push(direWolf.id);
+      if (youngWolf) ids.push(youngWolf.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Werewolf") {
+      const werewolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Werewolf" },
+      });
+      const alphaWolf = await prisma.monsterTemplate.findFirst({
+        where: { name: "Alpha Wolf" },
+      });
+      const ids = [];
+      if (werewolf) ids.push(werewolf.id);
+      if (alphaWolf) ids.push(alphaWolf.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    }
+
+    // HAUNTED FOREST EVENTS
+    else if (template.name === "Wandering Spirits") {
+      const lostSpirit = await prisma.monsterTemplate.findFirst({
+        where: { name: "Lost Spirit" },
+      });
+      if (lostSpirit && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [lostSpirit.id];
+      }
+    } else if (template.name === "Wraith Attack") {
+      const wraith = await prisma.monsterTemplate.findFirst({
+        where: { name: "Wraith" },
+      });
+      const lostSpirit = await prisma.monsterTemplate.findFirst({
+        where: { name: "Lost Spirit" },
+      });
+      const ids = [];
+      if (wraith) ids.push(wraith.id);
+      if (lostSpirit) ids.push(lostSpirit.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Poltergeist Chaos") {
+      const poltergeist = await prisma.monsterTemplate.findFirst({
+        where: { name: "Poltergeist" },
+      });
+      const lostSpirit = await prisma.monsterTemplate.findFirst({
+        where: { name: "Lost Spirit" },
+      });
+      const ids = [];
+      if (poltergeist) ids.push(poltergeist.id);
+      if (lostSpirit) ids.push(lostSpirit.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Spirit Horde") {
+      const lostSpirit = await prisma.monsterTemplate.findFirst({
+        where: { name: "Lost Spirit" },
+      });
+      const wraith = await prisma.monsterTemplate.findFirst({
+        where: { name: "Wraith" },
+      });
+      const ids = [];
+      if (lostSpirit) ids.push(lostSpirit.id);
+      if (wraith) ids.push(wraith.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Banshee") {
+      const banshee = await prisma.monsterTemplate.findFirst({
+        where: { name: "Banshee" },
+      });
+      const wraith = await prisma.monsterTemplate.findFirst({
+        where: { name: "Wraith" },
+      });
+      const poltergeist = await prisma.monsterTemplate.findFirst({
+        where: { name: "Poltergeist" },
+      });
+      const ids = [];
+      if (banshee) ids.push(banshee.id);
+      if (wraith) ids.push(wraith.id);
+      if (poltergeist) ids.push(poltergeist.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    }
+
+    // ABANDONED MINE EVENTS
+    else if (template.name === "Spider Nest") {
+      const caveSpider = await prisma.monsterTemplate.findFirst({
+        where: { name: "Cave Spider" },
+      });
+      if (caveSpider && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [caveSpider.id];
+      }
+    } else if (template.name === "Corrupted Workers") {
+      const corruptedMiner = await prisma.monsterTemplate.findFirst({
+        where: { name: "Corrupted Miner" },
+      });
+      if (corruptedMiner && "monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = [corruptedMiner.id];
+      }
+    } else if (template.name === "Dark Ambush") {
+      const caveSpider = await prisma.monsterTemplate.findFirst({
+        where: { name: "Cave Spider" },
+      });
+      const darkDweller = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dark Dweller" },
+      });
+      const ids = [];
+      if (caveSpider) ids.push(caveSpider.id);
+      if (darkDweller) ids.push(darkDweller.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Mine Patrol") {
+      const caveSpider = await prisma.monsterTemplate.findFirst({
+        where: { name: "Cave Spider" },
+      });
+      const corruptedMiner = await prisma.monsterTemplate.findFirst({
+        where: { name: "Corrupted Miner" },
+      });
+      const ids = [];
+      if (caveSpider) ids.push(caveSpider.id);
+      if (corruptedMiner) ids.push(corruptedMiner.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
+      }
+    } else if (template.name === "Mine Horror") {
+      const mineHorror = await prisma.monsterTemplate.findFirst({
+        where: { name: "Mine Horror" },
+      });
+      const darkDweller = await prisma.monsterTemplate.findFirst({
+        where: { name: "Dark Dweller" },
+      });
+      const corruptedMiner = await prisma.monsterTemplate.findFirst({
+        where: { name: "Corrupted Miner" },
+      });
+      const ids = [];
+      if (mineHorror) ids.push(mineHorror.id);
+      if (darkDweller) ids.push(darkDweller.id);
+      if (corruptedMiner) ids.push(corruptedMiner.id);
+      if ("monsterTemplateIds" in templateData.config) {
+        templateData.config.monsterTemplateIds = ids;
       }
     }
 

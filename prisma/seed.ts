@@ -249,8 +249,9 @@ async function main() {
   console.log("✅ Seed complete!");
 }
 
-// Import and run monster loot seed
+// Import and run all seed files
 import "./seeds/monsterLoot";
+import "./seeds/missionEventMappings";
 
 main()
   .catch((e) => {
