@@ -452,7 +452,10 @@ export class MissionScheduler {
   private static async checkAllPlayersDead(session: any): Promise<boolean> {
     if (session.party) {
       const aliveMembers = session.party.members.filter(
-        (member: any) => member.character.currentHealth > 0
+        (member: any) =>
+          member.character &&
+          member.character.currentHealth != null &&
+          member.character.currentHealth > 0
       );
       return aliveMembers.length === 0;
     } else {
@@ -578,19 +581,22 @@ export class MissionScheduler {
     if (session.party) {
       // Party mission - claim loot for each member
       for (const member of session.party.members) {
-        try {
-          const claimedLoot = await LootService.claimLoot(
-            sessionId,
-            member.character.id
-          );
-          console.log(
-            `✅ Claimed ${claimedLoot.length} loot items for character ${member.character.name}`
-          );
-        } catch (error) {
-          console.error(
-            `❌ Failed to claim loot for character ${member.character.id}:`,
-            error
-          );
+        // Only claim loot for player characters (not NPCs)
+        if (member.character) {
+          try {
+            const claimedLoot = await LootService.claimLoot(
+              sessionId,
+              member.character.id
+            );
+            console.log(
+              `✅ Claimed ${claimedLoot.length} loot items for character ${member.character.name}`
+            );
+          } catch (error) {
+            console.error(
+              `❌ Failed to claim loot for character ${member.character.id}:`,
+              error
+            );
+          }
         }
       }
     } else {

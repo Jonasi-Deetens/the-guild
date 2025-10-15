@@ -46,7 +46,23 @@ interface Party {
       name: string;
       level: number;
       reputation: number;
-    };
+    } | null;
+    npcCompanion: {
+      id: string;
+      name: string;
+      level: number;
+      class: string;
+      rarity: string;
+      maxHealth: number;
+      attack: number;
+      defense: number;
+      speed: number;
+      agility: number;
+      perception: number;
+      blockStrength: number;
+      criticalChance: number;
+    } | null;
+    isNPC: boolean;
     isReady: boolean;
   }>;
   createdAt: string;
@@ -123,10 +139,7 @@ export default function PartiesPage() {
       await refetchParties();
       const updatedParty = await refetchMyParty();
 
-      // Switch to party detail view with the joined party
-      if (updatedParty.data) {
-        setCurrentParty(updatedParty.data as Party);
-      }
+      // Party data will be updated via the refetch
     } catch (error) {
       console.error("Failed to join party:", error);
     }
@@ -135,7 +148,6 @@ export default function PartiesPage() {
   const handleLeaveParty = async () => {
     try {
       await leavePartyMutation.mutateAsync();
-      setCurrentParty(null);
       // Refresh the parties list and current party
       await refetchParties();
       await refetchMyParty();
@@ -227,44 +239,86 @@ export default function PartiesPage() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {myCurrentParty.members.map((member) => (
-                    <div
-                      key={member.character.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-gray-800/50"
-                    >
-                      <div className="flex items-center space-x-3">
-                        <div className="w-8 h-8 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white font-bold text-sm">
-                          {member.character.name[0]}
+                  {myCurrentParty.members.map((member) => {
+                    const isNPC = member.isNPC;
+                    const displayName = isNPC
+                      ? member.npcCompanion?.name
+                      : member.character?.name;
+                    const displayLevel = isNPC
+                      ? member.npcCompanion?.level
+                      : member.character?.level;
+                    const displayRep = isNPC
+                      ? 0
+                      : member.character?.reputation || 0;
+                    const isLeader =
+                      !isNPC &&
+                      member.character?.id === myCurrentParty.leader.id;
+
+                    return (
+                      <div
+                        key={
+                          isNPC
+                            ? `npc-${member.npcCompanion?.id}`
+                            : member.character?.id
+                        }
+                        className={`flex items-center justify-between p-3 rounded-lg ${
+                          isNPC
+                            ? "bg-blue-800/30 border border-blue-500/30"
+                            : "bg-gray-800/50"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-3">
+                          <div
+                            className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
+                              isNPC
+                                ? "bg-gradient-to-r from-blue-500 to-cyan-500"
+                                : "bg-gradient-to-r from-purple-500 to-blue-500"
+                            }`}
+                          >
+                            {displayName?.[0] || "?"}
+                          </div>
+                          <div>
+                            <div className="flex items-center space-x-2">
+                              <span className="text-white font-medium">
+                                {displayName}
+                              </span>
+                              {isLeader && (
+                                <Crown className="h-4 w-4 text-yellow-400" />
+                              )}
+                              {isNPC && (
+                                <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">
+                                  NPC
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-gray-400">
+                              Lv.{displayLevel} •{" "}
+                              {isNPC ? (
+                                <span className="text-blue-300">
+                                  {member.npcCompanion?.class}
+                                </span>
+                              ) : (
+                                <>
+                                  {displayRep > 0 ? "+" : ""}
+                                  {displayRep} rep
+                                </>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="flex items-center space-x-2">
-                            <span className="text-white font-medium">
-                              {member.character.name}
-                            </span>
-                            {member.character.id ===
-                              myCurrentParty.leader.id && (
-                              <Crown className="h-4 w-4 text-yellow-400" />
-                            )}
-                          </div>
-                          <div className="text-sm text-gray-400">
-                            Lv.{member.character.level} •{" "}
-                            {member.character.reputation > 0 ? "+" : ""}
-                            {member.character.reputation} rep
-                          </div>
+                        <div className="flex items-center space-x-2">
+                          {member.isReady ? (
+                            <CheckCircle className="h-5 w-5 text-green-400" />
+                          ) : (
+                            <Clock className="h-5 w-5 text-yellow-400" />
+                          )}
+                          <span className="text-sm text-gray-400">
+                            {member.isReady ? "Ready" : "Not Ready"}
+                          </span>
                         </div>
                       </div>
-                      <div className="flex items-center space-x-2">
-                        {member.isReady ? (
-                          <CheckCircle className="h-5 w-5 text-green-400" />
-                        ) : (
-                          <Clock className="h-5 w-5 text-yellow-400" />
-                        )}
-                        <span className="text-sm text-gray-400">
-                          {member.isReady ? "Ready" : "Not Ready"}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
@@ -327,7 +381,7 @@ export default function PartiesPage() {
                   className="w-full justify-start"
                   onClick={() => {
                     const currentMember = myCurrentParty.members.find(
-                      (m) => m.character.id === myCharacter?.id
+                      (m) => m.character?.id === myCharacter?.id
                     );
                     if (currentMember) {
                       handleToggleReady(!currentMember.isReady);
@@ -335,14 +389,14 @@ export default function PartiesPage() {
                   }}
                 >
                   {myCurrentParty.members.find(
-                    (m) => m.character.id === myCharacter?.id
+                    (m) => m.character?.id === myCharacter?.id
                   )?.isReady ? (
                     <XCircle className="h-4 w-4 mr-2" />
                   ) : (
                     <CheckCircle className="h-4 w-4 mr-2" />
                   )}
                   {myCurrentParty.members.find(
-                    (m) => m.character.id === myCharacter?.id
+                    (m) => m.character?.id === myCharacter?.id
                   )?.isReady
                     ? "Not Ready"
                     : "Ready"}
@@ -350,6 +404,14 @@ export default function PartiesPage() {
                 <Button variant="outline" className="w-full justify-start">
                   <Users className="h-4 w-4 mr-2" />
                   Invite Players
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => router.push("/game/companions")}
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Hire NPCs
                 </Button>
                 <Button
                   variant="outline"
@@ -481,14 +543,20 @@ export default function PartiesPage() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-400">Members</span>
                     <div className="flex items-center space-x-1">
-                      {party.members.map((member, index) => (
-                        <div
-                          key={index}
-                          className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
-                        >
-                          {member.character.name[0]}
-                        </div>
-                      ))}
+                      {party.members.map((member, index) => {
+                        const displayName =
+                          member.isNPC && member.npcCompanion
+                            ? member.npcCompanion.name
+                            : member.character?.name;
+                        return (
+                          <div
+                            key={index}
+                            className="w-6 h-6 rounded-full bg-gradient-to-r from-purple-500 to-blue-500 flex items-center justify-center text-white text-xs font-bold"
+                          >
+                            {displayName?.[0] || "?"}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>

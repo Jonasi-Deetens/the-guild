@@ -107,6 +107,23 @@ export const partyRouter = createTRPCRouter({
                 reputation: true,
               },
             },
+            npcCompanion: {
+              select: {
+                id: true,
+                name: true,
+                level: true,
+                class: true,
+                rarity: true,
+                maxHealth: true,
+                attack: true,
+                defense: true,
+                speed: true,
+                agility: true,
+                perception: true,
+                blockStrength: true,
+                criticalChance: true,
+              },
+            },
           },
         },
       },
@@ -157,12 +174,11 @@ export const partyRouter = createTRPCRouter({
     }
 
     // Check if character is actually a member of the party
-    const partyMember = await ctx.db.partyMember.findUnique({
+    const partyMember = await ctx.db.partyMember.findFirst({
       where: {
-        partyId_characterId: {
-          partyId: character.partyId,
-          characterId: character.id,
-        },
+        partyId: character.partyId,
+        characterId: character.id,
+        isNPC: false,
       },
     });
 
@@ -196,6 +212,24 @@ export const partyRouter = createTRPCRouter({
                 name: true,
                 level: true,
                 reputation: true,
+              },
+            },
+            npcCompanion: {
+              select: {
+                id: true,
+                name: true,
+                level: true,
+                class: true,
+                maxHealth: true,
+                attack: true,
+                defense: true,
+                speed: true,
+                agility: true,
+                perception: true,
+                blockStrength: true,
+                criticalChance: true,
+                rarity: true,
+                abilities: true,
               },
             },
           },
@@ -364,12 +398,11 @@ export const partyRouter = createTRPCRouter({
     }
 
     // Verify character is actually a member
-    const partyMember = await ctx.db.partyMember.findUnique({
+    const partyMember = await ctx.db.partyMember.findFirst({
       where: {
-        partyId_characterId: {
-          partyId: character.partyId,
-          characterId: character.id,
-        },
+        partyId: character.partyId,
+        characterId: character.id,
+        isNPC: false,
       },
     });
 
@@ -428,12 +461,11 @@ export const partyRouter = createTRPCRouter({
 
     // Check if character has partyId but is not actually a member
     if (character.partyId) {
-      const partyMember = await ctx.db.partyMember.findUnique({
+      const partyMember = await ctx.db.partyMember.findFirst({
         where: {
-          partyId_characterId: {
-            partyId: character.partyId,
-            characterId: character.id,
-          },
+          partyId: character.partyId,
+          characterId: character.id,
+          isNPC: false,
         },
       });
 

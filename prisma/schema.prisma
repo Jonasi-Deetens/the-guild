@@ -95,6 +95,10 @@ model Character {
   targetTransactions    Transaction[]         @relation("TransactionTarget")
   lootRolls             LootRoll[]
 
+  // NPC relations
+  hiredNPCs    HiredNPC[]
+  unlockedNPCs UnlockedNPC[]
+
   @@index([isOnline])
   @@index([reputation])
   @@index([gold])
@@ -148,16 +152,84 @@ model Party {
 }
 
 model PartyMember {
-  id          String    @id @default(cuid())
+  id          String     @id @default(cuid())
   role        String?
-  isReady     Boolean   @default(false)
-  joinedAt    DateTime  @default(now())
+  isReady     Boolean    @default(false)
+  joinedAt    DateTime   @default(now())
   partyId     String
-  characterId String
-  character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  party       Party     @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  characterId String?
+  character   Character? @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  party       Party      @relation(fields: [partyId], references: [id], onDelete: Cascade)
 
-  @@unique([partyId, characterId])
+  // NPC support
+  isNPC          Boolean       @default(false)
+  npcCompanionId String?
+  npcCompanion   NPCCompanion? @relation(fields: [npcCompanionId], references: [id])
+
+  @@unique([partyId, npcCompanionId])
+  @@unique([partyId, characterId, npcCompanionId])
+}
+
+model NPCCompanion {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  level       Int     @default(1)
+  class       String // e.g., "Warrior", "Rogue", "Cleric", "Mage", "Archer"
+  description String?
+  backstory   String?
+
+  // Stats
+  maxHealth      Int   @default(100)
+  attack         Int   @default(10)
+  defense        Int   @default(5)
+  speed          Int   @default(5)
+  agility        Int   @default(5)
+  perception     Int   @default(5)
+  blockStrength  Int   @default(3)
+  criticalChance Float @default(0.05)
+
+  // Hiring system
+  hireCost          Int           @default(50) // Gold cost per mission
+  unlockType        NPCUnlockType @default(GOLD)
+  unlockRequirement Int? // Reputation/level needed for milestone NPCs
+  rarity            NPCRarity     @default(COMMON)
+
+  // Special abilities (JSON)
+  abilities Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  partyMembers PartyMember[]
+  hiredNPCs    HiredNPC[]
+  unlockedNPCs UnlockedNPC[]
+}
+
+model HiredNPC {
+  id             String    @id @default(cuid())
+  characterId    String
+  npcCompanionId String
+  sessionId      String?
+  hiredAt        DateTime  @default(now())
+  expiresAt      DateTime? // When the hire expires (end of mission)
+
+  character    Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  npcCompanion NPCCompanion @relation(fields: [npcCompanionId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, npcCompanionId, sessionId])
+}
+
+model UnlockedNPC {
+  id             String   @id @default(cuid())
+  characterId    String
+  npcCompanionId String
+  unlockedAt     DateTime @default(now())
+
+  character    Character    @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  npcCompanion NPCCompanion @relation(fields: [npcCompanionId], references: [id], onDelete: Cascade)
+
+  @@unique([characterId, npcCompanionId])
 }
 
 model DungeonSession {
@@ -648,4 +720,17 @@ enum LootDistributionType {
 enum LootRollType {
   NEED // Need roll (always 100, highest priority)
   GREED // Greed roll (1-100, lower priority than Need)
+}
+
+enum NPCUnlockType {
+  GOLD // Can be hired with gold
+  MILESTONE // Unlocked through reputation/level milestones
+}
+
+enum NPCRarity {
+  COMMON
+  UNCOMMON
+  RARE
+  EPIC
+  LEGENDARY
 }

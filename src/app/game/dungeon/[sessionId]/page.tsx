@@ -327,7 +327,10 @@ export default function DungeonPage() {
           isOpen={showLootModal}
           onClose={() => setShowLootModal(false)}
           sessionId={session.id}
-          characterId={session.party?.members[0]?.character.id || ""}
+          characterId={
+            session.party?.members.find((member) => member.character)?.character
+              ?.id || ""
+          }
           isMasterLooter={false} // TODO: Get from session data when available
         />
       )}

@@ -321,7 +321,12 @@ export class RewardService {
 
       // Apply base mission rewards to all party members
       for (const member of partyMembers) {
-        if (member.character.currentHealth > 0) {
+        // Only give rewards to player characters (not NPCs)
+        if (
+          member.character &&
+          member.character.currentHealth != null &&
+          member.character.currentHealth > 0
+        ) {
           // Only alive members get rewards
           await this.applyEventRewards(
             sessionId,
@@ -344,7 +349,11 @@ export class RewardService {
         orderBy: { submittedAt: "desc" },
       });
 
-      if (recentAction?.character && recentAction.character.currentHealth > 0) {
+      if (
+        recentAction?.character &&
+        recentAction.character.currentHealth != null &&
+        recentAction.character.currentHealth > 0
+      ) {
         // Only alive characters get rewards
         await this.applyEventRewards(
           sessionId,

@@ -17,6 +17,12 @@ export class DungeonSessionService {
         party: {
           include: {
             characters: true,
+            members: {
+              include: {
+                character: true,
+                npcCompanion: true,
+              },
+            },
           },
         },
       },
@@ -79,6 +85,12 @@ export class DungeonSessionService {
         party: {
           include: {
             characters: true,
+            members: {
+              include: {
+                character: true,
+                npcCompanion: true,
+              },
+            },
           },
         },
       },
@@ -148,6 +160,12 @@ export class DungeonSessionService {
         party: {
           include: {
             characters: true,
+            members: {
+              include: {
+                character: true,
+                npcCompanion: true,
+              },
+            },
           },
         },
       },
@@ -183,7 +201,7 @@ export class DungeonSessionService {
   }
 
   /**
-   * Get party member details with current health
+   * Get party member details with current health (includes both characters and NPCs)
    */
   async getPartyMembersWithHealth(sessionId: string): Promise<
     Array<{
@@ -195,6 +213,8 @@ export class DungeonSessionService {
       defense: number;
       agility: number;
       blockStrength: number;
+      isNPC: boolean;
+      npcCompanionId?: string;
     }>
   > {
     const session = await db.dungeonSession.findUnique({
@@ -203,6 +223,12 @@ export class DungeonSessionService {
         party: {
           include: {
             characters: true,
+            members: {
+              include: {
+                character: true,
+                npcCompanion: true,
+              },
+            },
           },
         },
       },
@@ -212,16 +238,53 @@ export class DungeonSessionService {
       return [];
     }
 
-    return session.party.characters.map((character) => ({
-      id: character.id,
-      name: character.name,
-      currentHealth: character.currentHealth || character.maxHealth,
-      maxHealth: character.maxHealth,
-      attack: character.attack,
-      defense: character.defense,
-      agility: character.agility,
-      blockStrength: character.blockStrength,
-    }));
+    const members: Array<{
+      id: string;
+      name: string;
+      currentHealth: number;
+      maxHealth: number;
+      attack: number;
+      defense: number;
+      agility: number;
+      blockStrength: number;
+      isNPC: boolean;
+      npcCompanionId?: string;
+    }> = [];
+
+    // Add player characters
+    for (const character of session.party.characters) {
+      members.push({
+        id: character.id,
+        name: character.name,
+        currentHealth: character.currentHealth || character.maxHealth,
+        maxHealth: character.maxHealth,
+        attack: character.attack,
+        defense: character.defense,
+        agility: character.agility,
+        blockStrength: character.blockStrength,
+        isNPC: false,
+      });
+    }
+
+    // Add NPCs
+    for (const member of session.party.members) {
+      if (member.isNPC && member.npcCompanion) {
+        members.push({
+          id: member.npcCompanion.id,
+          name: member.npcCompanion.name,
+          currentHealth: member.npcCompanion.maxHealth, // NPCs start at full health
+          maxHealth: member.npcCompanion.maxHealth,
+          attack: member.npcCompanion.attack,
+          defense: member.npcCompanion.defense,
+          agility: member.npcCompanion.agility,
+          blockStrength: member.npcCompanion.blockStrength,
+          isNPC: true,
+          npcCompanionId: member.npcCompanion.id,
+        });
+      }
+    }
+
+    return members;
   }
 
   /**
@@ -233,7 +296,7 @@ export class DungeonSessionService {
   }
 
   /**
-   * Get alive party members only
+   * Get alive party members only (includes both characters and NPCs)
    */
   async getAlivePartyMembers(sessionId: string): Promise<
     Array<{
@@ -245,6 +308,8 @@ export class DungeonSessionService {
       defense: number;
       agility: number;
       blockStrength: number;
+      isNPC: boolean;
+      npcCompanionId?: string;
     }>
   > {
     const partyMembers = await this.getPartyMembersWithHealth(sessionId);
@@ -261,6 +326,12 @@ export class DungeonSessionService {
         party: {
           include: {
             characters: true,
+            members: {
+              include: {
+                character: true,
+                npcCompanion: true,
+              },
+            },
           },
         },
       },

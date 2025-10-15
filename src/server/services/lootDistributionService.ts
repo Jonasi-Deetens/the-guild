@@ -33,6 +33,7 @@ export class LootDistributionService {
             members: {
               include: {
                 character: true,
+                npcCompanion: true,
               },
             },
           },
@@ -96,13 +97,17 @@ export class LootDistributionService {
   ): Promise<LootDistributionResult> {
     console.log(`🎲 Using Need/Greed distribution system`);
 
-    const partyMembers = session.party.members.map((m: any) => m.character);
+    // Get only player characters (exclude NPCs from rolling)
+    const playerMembers = session.party.members
+      .filter((m: any) => !m.isNPC && m.character)
+      .map((m: any) => m.character);
+
     const assignedLoot: any[] = [];
 
     for (const loot of unclaimedLoot) {
-      // Gold coins are always split equally
+      // Gold coins are always split with NPCs taking their share
       if (loot.item.name === "Gold Coin") {
-        await this.splitGoldEqually(session, loot, partyMembers);
+        await this.splitGoldWithNPCs(session, loot, playerMembers);
         assignedLoot.push({
           ...loot,
           distributionType: "GOLD_SPLIT",
@@ -111,7 +116,7 @@ export class LootDistributionService {
         continue;
       }
 
-      // For other items, set up for Need/Greed rolling
+      // For other items, set up for Need/Greed rolling (NPCs don't participate)
       await db.dungeonLoot.update({
         where: { id: loot.id },
         data: {
@@ -131,7 +136,7 @@ export class LootDistributionService {
       success: true,
       message: `Loot distribution set up for Need/Greed rolling. ${
         assignedLoot.filter((l) => l.distributionType === "GOLD_SPLIT").length
-      } gold items split equally.`,
+      } gold items split with NPCs taking their share.`,
       assignedLoot,
     };
   }
@@ -145,13 +150,17 @@ export class LootDistributionService {
   ): Promise<LootDistributionResult> {
     console.log(`👑 Using Master Looter distribution system`);
 
-    const partyMembers = session.party.members.map((m: any) => m.character);
+    // Get only player characters (exclude NPCs from distribution)
+    const playerMembers = session.party.members
+      .filter((m: any) => !m.isNPC && m.character)
+      .map((m: any) => m.character);
+
     const assignedLoot: any[] = [];
 
     for (const loot of unclaimedLoot) {
-      // Gold coins are always split equally
+      // Gold coins are always split with NPCs taking their share
       if (loot.item.name === "Gold Coin") {
-        await this.splitGoldEqually(session, loot, partyMembers);
+        await this.splitGoldWithNPCs(session, loot, playerMembers);
         assignedLoot.push({
           ...loot,
           distributionType: "GOLD_SPLIT",
@@ -181,7 +190,7 @@ export class LootDistributionService {
       success: true,
       message: `Loot assigned to Master Looter for distribution. ${
         assignedLoot.filter((l) => l.distributionType === "GOLD_SPLIT").length
-      } gold items split equally.`,
+      } gold items split with NPCs taking their share.`,
       assignedLoot,
     };
   }
@@ -195,14 +204,18 @@ export class LootDistributionService {
   ): Promise<LootDistributionResult> {
     console.log(`🤖 Using automatic distribution system`);
 
-    const partyMembers =
-      session.party?.members.map((m: any) => m.character) || [];
+    // Get only player characters (exclude NPCs from item distribution)
+    const playerMembers =
+      session.party?.members
+        .filter((m: any) => !m.isNPC && m.character)
+        .map((m: any) => m.character) || [];
+
     const assignedLoot: any[] = [];
 
     for (const loot of unclaimedLoot) {
-      // Gold coins are always split equally
-      if (loot.item.name === "Gold Coin" && partyMembers.length > 0) {
-        await this.splitGoldEqually(session, loot, partyMembers);
+      // Gold coins are always split with NPCs taking their share
+      if (loot.item.name === "Gold Coin" && playerMembers.length > 0) {
+        await this.splitGoldWithNPCs(session, loot, playerMembers);
         assignedLoot.push({
           ...loot,
           distributionType: "GOLD_SPLIT",
@@ -211,9 +224,9 @@ export class LootDistributionService {
         continue;
       }
 
-      // For other items, assign to all party members (current behavior)
-      if (partyMembers.length > 0) {
-        for (const member of partyMembers) {
+      // For other items, assign to all player characters only (NPCs don't get items)
+      if (playerMembers.length > 0) {
+        for (const member of playerMembers) {
           await this.assignLootToCharacter(loot, member.id);
         }
         assignedLoot.push({
@@ -239,30 +252,49 @@ export class LootDistributionService {
       success: true,
       message: `Loot distributed automatically. ${
         assignedLoot.filter((l) => l.distributionType === "GOLD_SPLIT").length
-      } gold items split equally.`,
+      } gold items split with NPCs taking their share.`,
       assignedLoot,
     };
   }
 
   /**
-   * Split gold equally among all party members
+   * Split gold with NPCs taking their share (20% per NPC)
    */
-  private static async splitGoldEqually(
+  private static async splitGoldWithNPCs(
     session: any,
     goldLoot: any,
-    partyMembers: any[]
+    playerMembers: any[]
   ): Promise<void> {
     const totalGold = goldLoot.quantity;
-    const goldPerMember = Math.floor(totalGold / partyMembers.length);
-    const remainder = totalGold % partyMembers.length;
+
+    // Count NPCs in the party
+    const npcCount = session.party.members.filter((m: any) => m.isNPC).length;
+
+    // Calculate NPC share (20% per NPC)
+    const npcSharePercent = npcCount * 0.2;
+    const npcTotalShare = Math.floor(totalGold * npcSharePercent);
+    const playerGold = totalGold - npcTotalShare;
+
+    // Split remaining gold among players
+    const goldPerPlayer =
+      playerMembers.length > 0
+        ? Math.floor(playerGold / playerMembers.length)
+        : 0;
+    const playerRemainder =
+      playerMembers.length > 0 ? playerGold % playerMembers.length : 0;
 
     console.log(
-      `💰 Splitting ${totalGold} gold among ${partyMembers.length} members (${goldPerMember} each, ${remainder} remainder)`
+      `💰 Splitting ${totalGold} gold: ${npcTotalShare} to ${npcCount} NPCs (${
+        npcSharePercent * 100
+      }%), ${playerGold} to ${
+        playerMembers.length
+      } players (${goldPerPlayer} each)`
     );
 
-    for (let i = 0; i < partyMembers.length; i++) {
-      const member = partyMembers[i];
-      const goldForMember = goldPerMember + (i < remainder ? 1 : 0);
+    // Give gold to players
+    for (let i = 0; i < playerMembers.length; i++) {
+      const member = playerMembers[i];
+      const goldForMember = goldPerPlayer + (i < playerRemainder ? 1 : 0);
 
       if (goldForMember > 0) {
         // Add gold directly to character
@@ -275,18 +307,165 @@ export class LootDistributionService {
           },
         });
 
-        // Mark loot as claimed
-        await db.dungeonLoot.update({
-          where: { id: goldLoot.id },
+        console.log(`💰 Gave ${goldForMember} gold to player ${member.name}`);
+      }
+    }
+
+    // Mark loot as claimed (NPCs don't actually get the gold, it's just deducted)
+    if (playerMembers.length > 0) {
+      await db.dungeonLoot.update({
+        where: { id: goldLoot.id },
+        data: {
+          claimedBy: playerMembers[0].id, // Mark as claimed by first player
+          claimedAt: new Date(),
+          distributionType: "GOLD_SPLIT",
+        },
+      });
+    }
+
+    if (npcTotalShare > 0) {
+      console.log(
+        `💰 NPCs took their share: ${npcTotalShare} gold (${npcCount} NPCs)`
+      );
+    }
+  }
+
+  /**
+   * Split gold with NPCs taking their share but not receiving it
+   */
+  private static async splitGoldWithNPCs(
+    session: any,
+    goldLoot: any,
+    playerMembers: any[]
+  ): Promise<void> {
+    const totalGold = goldLoot.quantity;
+    const totalMembers = session.party.members.length;
+    const npcCount = session.party.members.filter((m: any) => m.isNPC).length;
+
+    // NPCs take their share but don't receive gold directly
+    const npcShare = npcCount * Math.floor(totalGold / totalMembers);
+    const playerGold = totalGold - npcShare;
+
+    const goldPerPlayer =
+      playerMembers.length > 0
+        ? Math.floor(playerGold / playerMembers.length)
+        : 0;
+    const remainder =
+      playerMembers.length > 0 ? playerGold % playerMembers.length : 0;
+
+    console.log(
+      `💰 Need/Greed: Splitting ${totalGold} gold: ${npcShare} to ${npcCount} NPCs, ${playerGold} to ${playerMembers.length} players (${goldPerPlayer} each, ${remainder} remainder)`
+    );
+
+    // Give gold to players
+    for (let i = 0; i < playerMembers.length; i++) {
+      const member = playerMembers[i];
+      const goldForMember = goldPerPlayer + (i < remainder ? 1 : 0);
+
+      if (goldForMember > 0) {
+        // Add gold directly to character
+        await db.character.update({
+          where: { id: member.id },
           data: {
-            claimedBy: member.id,
-            claimedAt: new Date(),
-            distributionType: "GOLD_SPLIT",
+            gold: {
+              increment: goldForMember,
+            },
           },
         });
 
-        console.log(`💰 Gave ${goldForMember} gold to ${member.name}`);
+        console.log(`💰 Gave ${goldForMember} gold to player ${member.name}`);
       }
+    }
+
+    // Mark loot as claimed
+    if (playerMembers.length > 0) {
+      await db.dungeonLoot.update({
+        where: { id: goldLoot.id },
+        data: {
+          claimedBy: playerMembers[0].id,
+          claimedAt: new Date(),
+          distributionType: "GOLD_SPLIT",
+        },
+      });
+    }
+
+    // Log NPC share
+    if (npcShare > 0) {
+      console.log(
+        `💰 ${npcShare} gold allocated to ${npcCount} NPCs (not distributed)`
+      );
+    }
+  }
+
+  /**
+   * Split gold equally among all party members
+   */
+  private static async splitGoldEqually(
+    session: any,
+    goldLoot: any,
+    partyMembers: any[]
+  ): Promise<void> {
+    const totalGold = goldLoot.quantity;
+
+    // Separate players and NPCs
+    const playerMembers = partyMembers.filter((member) => !member.isNPC);
+    const npcMembers = partyMembers.filter((member) => member.isNPC);
+
+    // NPCs take their share but don't receive gold directly
+    const npcShare =
+      npcMembers.length * Math.floor(totalGold / partyMembers.length);
+    const playerGold = totalGold - npcShare;
+
+    const goldPerPlayer =
+      playerMembers.length > 0
+        ? Math.floor(playerGold / playerMembers.length)
+        : 0;
+    const remainder =
+      playerMembers.length > 0 ? playerGold % playerMembers.length : 0;
+
+    console.log(
+      `💰 Splitting ${totalGold} gold: ${npcShare} to ${npcMembers.length} NPCs, ${playerGold} to ${playerMembers.length} players (${goldPerPlayer} each, ${remainder} remainder)`
+    );
+
+    // Give gold to players
+    for (let i = 0; i < playerMembers.length; i++) {
+      const member = playerMembers[i];
+      const goldForMember = goldPerPlayer + (i < remainder ? 1 : 0);
+
+      if (goldForMember > 0) {
+        // Add gold directly to character
+        await db.character.update({
+          where: { id: member.characterId },
+          data: {
+            gold: {
+              increment: goldForMember,
+            },
+          },
+        });
+
+        console.log(
+          `💰 Gave ${goldForMember} gold to player ${member.character?.name}`
+        );
+      }
+    }
+
+    // Mark loot as claimed (NPCs don't get individual claims)
+    if (playerMembers.length > 0) {
+      await db.dungeonLoot.update({
+        where: { id: goldLoot.id },
+        data: {
+          claimedBy: playerMembers[0].characterId, // Use first player as the "claimer"
+          claimedAt: new Date(),
+          distributionType: "GOLD_SPLIT",
+        },
+      });
+    }
+
+    // Log NPC share
+    if (npcShare > 0) {
+      console.log(
+        `💰 ${npcShare} gold allocated to ${npcMembers.length} NPCs (not distributed)`
+      );
     }
   }
 
@@ -586,6 +765,7 @@ export class LootDistributionService {
             members: {
               include: {
                 character: true,
+                npcCompanion: true,
               },
             },
           },

@@ -22,6 +22,7 @@ interface CombatResult {
   minigameResult?: any;
   generatedLoot?: any[];
   silent?: boolean;
+  npcResults?: CombatResult[];
 }
 
 export class CombatService {
@@ -229,9 +230,13 @@ export class CombatService {
         }
       }
 
+      // NPCs now act automatically in the frontend combat system
+
+      const combinedMessage = message;
+
       return {
         success: true,
-        message: message,
+        message: combinedMessage,
         damage: finalDamage,
         isCritical: isCritical,
         combatState: combatState,

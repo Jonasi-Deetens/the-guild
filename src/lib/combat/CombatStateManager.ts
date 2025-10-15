@@ -8,6 +8,9 @@ export interface CombatPartyMember {
   agility: number;
   blockStrength: number;
   isDead: boolean;
+  isNPC?: boolean;
+  attackInterval?: number;
+  nextAttackTime?: number;
 }
 
 export interface EnhancedMonster {
@@ -76,6 +79,7 @@ export class CombatStateManager {
   private playersRevived: number = 0;
   private monstersDefeated: number = 0;
   private contributionByPlayer: Record<string, number> = {};
+  private turnCount: number = 0;
 
   constructor() {
     this.gameStartTime = Date.now();
@@ -84,20 +88,15 @@ export class CombatStateManager {
   /**
    * Initialize combat with party members and monster configurations
    */
-  initializeCombat(
-    partyMembers: CombatPartyMember[],
-    monsterConfigs: {
-      templateIds: string[];
-      minMonsters: number;
-      maxMonsters: number;
-      eliteChance: number;
-      specialAbilityChance: number;
-    }
-  ): void {
+  initializeCombat(partyMembers: CombatPartyMember[]): void {
     this.party = partyMembers.map((member) => ({
       ...member,
       currentHealth: member.currentHealth || member.maxHealth,
       isDead: false,
+      // Preserve NPC attack timing properties
+      isNPC: member.isNPC,
+      attackInterval: member.attackInterval,
+      nextAttackTime: member.nextAttackTime,
     }));
 
     // Reset combat stats
@@ -119,17 +118,6 @@ export class CombatStateManager {
    */
   setMonsters(monsters: EnhancedMonster[]): void {
     this.monsters = monsters;
-
-    console.log("🔍 [CombatStateManager] setMonsters called:", {
-      monsterCount: monsters.length,
-      monsters: monsters.map((m) => ({
-        name: m.name,
-        health: m.health,
-        maxHealth: m.maxHealth,
-        attack: m.attack,
-        defense: m.defense,
-      })),
-    });
 
     // Initialize block states for each monster
     this.monsters.forEach((monster) => {
@@ -258,35 +246,10 @@ export class CombatStateManager {
     memberId: string,
     monsterId: string
   ): { damage: number; isCritical: boolean } {
-    console.log("🔍 [CombatStateManager] processPartyAttack called:", {
-      memberId,
-      monsterId,
-      partyCount: this.party.length,
-      monsterCount: this.monsters.length,
-    });
-
     const member = this.party.find((p) => p.id === memberId);
     const monster = this.monsters.find((m) => m.id === monsterId);
 
-    console.log("🔍 [CombatStateManager] Found member and monster:", {
-      member: member
-        ? { id: member.id, name: member.name, isDead: member.isDead }
-        : null,
-      monster: monster
-        ? { id: monster.id, name: monster.name, health: monster.health }
-        : null,
-    });
-
     if (!member || !monster || member.isDead || monster.health <= 0) {
-      console.log(
-        "🔍 [CombatStateManager] Early return from processPartyAttack:",
-        {
-          noMember: !member,
-          noMonster: !monster,
-          memberDead: member?.isDead,
-          monsterDead: monster?.health <= 0,
-        }
-      );
       return { damage: 0, isCritical: false };
     }
 
@@ -297,36 +260,21 @@ export class CombatStateManager {
 
     const isCritical = damage > member.attack;
 
-    console.log("🔍 [CombatStateManager] Damage calculation:", {
-      memberAttack: member.attack,
-      monsterDefense: monster.defense,
-      calculatedDamage: damage,
-      isCritical,
-    });
-
     // Apply damage
     const wasAlive = monster.health > 0;
     monster.health = Math.max(0, monster.health - damage);
     const isNowDead = wasAlive && monster.health === 0;
 
-    console.log("🔍 [CombatStateManager] Damage applied:", {
-      wasAlive,
-      newHealth: monster.health,
-      isNowDead,
-    });
-
     // Update stats
     this.totalClicks++;
     this.totalDamageDealt += damage;
+    this.turnCount++; // Increment turn count here
     this.contributionByPlayer[memberId] =
       (this.contributionByPlayer[memberId] || 0) + damage;
 
     // Count monsters defeated
     if (isNowDead) {
       this.monstersDefeated++;
-      console.log(
-        `💀 Monster ${monster.name} defeated! Total defeated: ${this.monstersDefeated}`
-      );
     }
 
     // Log damage event
@@ -454,11 +402,6 @@ export class CombatStateManager {
     if (monster) {
       const nextAttackTime = Date.now() + monster.attackInterval * 1000; // Convert seconds to milliseconds
       monster.nextAttackTime = nextAttackTime;
-      console.log(`⏰ Set next attack time for ${monster.name}:`, {
-        attackSpeed: monster.attackInterval,
-        nextAttackIn: monster.attackInterval * 1000,
-        nextAttackTime: new Date(nextAttackTime).toLocaleTimeString(),
-      });
     }
   }
 
@@ -577,37 +520,12 @@ export class CombatStateManager {
     const aliveMembers = this.party.filter((member) => !member.isDead);
     const aliveMonsters = this.monsters.filter((monster) => monster.health > 0);
 
-    console.log("🔍 [CombatStateManager] checkGameEnd:", {
-      totalMonsters: this.monsters.length,
-      aliveMonsters: aliveMonsters.length,
-      totalParty: this.party.length,
-      aliveMembers: aliveMembers.length,
-      monsterHealths: this.monsters.map((m) => ({
-        name: m.name,
-        health: m.health,
-        maxHealth: m.maxHealth,
-        isDead: m.health <= 0,
-      })),
-    });
-
-    // Log each monster's health individually for debugging
-    this.monsters.forEach((monster, index) => {
-      console.log(
-        `🔍 Monster ${index}: ${monster.name} - Health: ${monster.health}/${
-          monster.maxHealth
-        } (${monster.health <= 0 ? "DEAD" : "ALIVE"})`
-      );
-    });
-
     if (aliveMonsters.length === 0) {
-      console.log("🎉 [CombatStateManager] Victory! All monsters defeated");
       return { isOver: true, victory: true };
     } else if (aliveMembers.length === 0) {
-      console.log("💀 [CombatStateManager] Defeat! All party members dead");
       return { isOver: true, victory: false };
     }
 
-    console.log("🔍 [CombatStateManager] Game not over yet");
     return { isOver: false, victory: false };
   }
 
@@ -617,13 +535,6 @@ export class CombatStateManager {
   getCombatResult(): CombatResult {
     const timeTaken = Date.now() - this.gameStartTime;
     const { victory } = this.checkGameEnd();
-
-    console.log("🔍 [CombatStateManager] getCombatResult called:", {
-      victory,
-      monstersDefeated: this.monstersDefeated,
-      totalMonsters: this.monsters.length,
-      aliveMonsters: this.monsters.filter((m) => m.health > 0).length,
-    });
 
     // Calculate party health updates
     const partyHealthUpdates: Record<string, number> = {};
@@ -657,6 +568,7 @@ export class CombatStateManager {
       blockStates: { ...this.blockStates }, // Create new object reference
       damageLog: [...this.damageLog], // Create new array reference
       gameStartTime: this.gameStartTime,
+      turnCount: this.turnCount,
     };
   }
 
@@ -664,19 +576,12 @@ export class CombatStateManager {
    * Restore state from saved combat data
    */
   restoreState(savedState: any): void {
-    console.log(
-      "🔄 [CombatStateManager] Restoring state from saved data:",
-      savedState
-    );
-
     if (savedState.monsters) {
       this.monsters = savedState.monsters;
-      console.log(`🔄 Restored ${this.monsters.length} monsters`);
     }
 
     if (savedState.party) {
       this.party = savedState.party;
-      console.log(`🔄 Restored ${this.party.length} party members`);
     }
 
     if (savedState.turnCount !== undefined) {
@@ -694,9 +599,6 @@ export class CombatStateManager {
 
     if (savedState.monstersDefeated !== undefined) {
       this.monstersDefeated = savedState.monstersDefeated;
-      console.log(
-        `🔄 Restored monsters defeated count: ${this.monstersDefeated}`
-      );
     }
 
     if (savedState.partyHealthUpdates) {
@@ -711,7 +613,5 @@ export class CombatStateManager {
         }
       );
     }
-
-    console.log("🔄 [CombatStateManager] State restoration complete");
   }
 }

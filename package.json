@@ -7,7 +7,7 @@
     "build": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "seed": "npx tsx prisma/seeds/monsters.ts && npx tsx prisma/seed.ts && npx tsx prisma/seeds/eventTemplates.ts && npx tsx prisma/seeds/items.ts"
+    "seed": "npx tsx prisma/seeds/monsters.ts && npx tsx prisma/seed.ts && npx tsx prisma/seeds/eventTemplates.ts && npx tsx prisma/seeds/items.ts && npx tsx prisma/seeds/npcs.ts"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.0",

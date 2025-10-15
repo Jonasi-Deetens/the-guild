@@ -10,6 +10,7 @@ import { theftRouter } from "./theft";
 import { reputationRouter } from "./reputation";
 import { statisticsRouter } from "./statistics";
 import { monsterRouter } from "./monster";
+import { npcRouter } from "./npc";
 
 export const appRouter = createTRPCRouter({
   character: characterRouter,
@@ -23,6 +24,7 @@ export const appRouter = createTRPCRouter({
   reputation: reputationRouter,
   statistics: statisticsRouter,
   monster: monsterRouter,
+  npc: npcRouter,
 });
 
 export type AppRouter = typeof appRouter;
