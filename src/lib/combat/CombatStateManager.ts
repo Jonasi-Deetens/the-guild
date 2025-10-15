@@ -611,6 +611,10 @@ export class CombatStateManager {
     const monster = this.monsters.find((m) => m.id === monsterId);
     const blockState = this.blockStates[monsterId];
 
+    console.log(
+      `🛡️ [CombatStateManager] Processing monster attack: ${monster?.name}, blockStatus: ${blockStatus}`
+    );
+
     if (!monster) return;
 
     // Find target (use provided targetId or pick random)
@@ -634,9 +638,14 @@ export class CombatStateManager {
     // Apply block/parry effects
     let finalDamage = damage;
 
+    console.log(
+      `💥 [CombatStateManager] Base damage: ${damage}, blockStatus: ${blockStatus}`
+    );
+
     if (blockStatus === "parry") {
       finalDamage = 0;
       this.totalPerfectParries++;
+      console.log(`🛡️ [CombatStateManager] PARRY! Damage reduced to 0`);
 
       this.addDamageEvent({
         type: "parry",
@@ -646,8 +655,11 @@ export class CombatStateManager {
         timestamp: Date.now(),
       });
     } else if (blockStatus === "block") {
-      finalDamage = Math.floor(damage * 0.3); // 70% damage reduction
+      finalDamage = Math.floor(damage * 0.5); // 50% damage reduction
       this.totalBlocks++;
+      console.log(
+        `🛡️ [CombatStateManager] BLOCK! Damage reduced from ${damage} to ${finalDamage}`
+      );
 
       this.addDamageEvent({
         type: "block",
@@ -656,6 +668,10 @@ export class CombatStateManager {
         target: target.name,
         timestamp: Date.now(),
       });
+    } else {
+      console.log(
+        `⚔️ [CombatStateManager] No block/parry, full damage: ${finalDamage}`
+      );
     }
 
     // Apply damage

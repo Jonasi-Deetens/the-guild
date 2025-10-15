@@ -109,6 +109,7 @@ export function CombatArenaLayout({
   const attackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const scheduledAttacks = useRef<Set<string>>(new Set());
   const attackTimeouts = useRef<Map<string, NodeJS.Timeout>>(new Map());
+  const blockStatesRef = useRef<Record<string, any>>({});
 
   // Calculate alive monsters and party members
   const aliveMonsters = gameState.monsters.filter((m) => m.health > 0);
@@ -409,19 +410,45 @@ export function CombatArenaLayout({
     event.stopPropagation();
     event.preventDefault();
 
+    console.log(
+      `🖱️ [CombatArenaLayout] Right-click detected on monster ${monsterId}`
+    );
+
     if (!gameState.gameActive || gameState.gameOver || !combatManager.current) {
+      console.log(
+        `❌ [CombatArenaLayout] Right-click blocked: game not active or combat manager not ready`
+      );
       return;
     }
 
     const monster = gameState.monsters.find((m) => m.id === monsterId);
-    if (!monster || monster.health <= 0) return;
+    if (!monster || monster.health <= 0) {
+      console.log(
+        `❌ [CombatArenaLayout] Right-click blocked: monster not found or dead`
+      );
+      return;
+    }
 
     // Check if we're in the block/parry window
     const now = Date.now();
     const timeUntilAttack = monster.nextAttackTime - now;
 
+    console.log(
+      `⏰ [CombatArenaLayout] Monster ${monster.name} timing: ${timeUntilAttack}ms until attack, rarity: ${monster.rarity}`
+    );
+    console.log(
+      `⏰ [CombatArenaLayout] Monster nextAttackTime: ${new Date(
+        monster.nextAttackTime
+      ).toLocaleTimeString()}, current time: ${new Date(
+        now
+      ).toLocaleTimeString()}`
+    );
+
     // Only allow blocking if attack is coming soon (within 2 seconds)
     if (timeUntilAttack <= 0 || timeUntilAttack > 2000) {
+      console.log(
+        `❌ [CombatArenaLayout] Right-click failed for ${monster.name}: ${timeUntilAttack}ms until attack (outside window)`
+      );
       return; // Too early or too late to block
     }
 
@@ -460,21 +487,34 @@ export function CombatArenaLayout({
 
     // Store the block status for when the attack happens
     if (blockStatus !== "none") {
-      // Only set block state for this specific monster, don't interfere with attack timers
+      console.log(
+        `🛡️ [CombatArenaLayout] Right-click block/parry set for ${monster.name}: ${blockStatus} (${timeUntilAttack}ms until attack)`
+      );
+
+      const blockState = {
+        monsterId,
+        isVisible: true,
+        warningStartTime: now,
+        attackTime: monster.nextAttackTime,
+        isHolding: false,
+        blockStatus: blockStatus,
+      };
+
+      // Store in ref for immediate access
+      blockStatesRef.current[monsterId] = blockState;
+
+      // Also set in React state for UI updates
       setGameState((prev) => ({
         ...prev,
         blockStates: {
           ...prev.blockStates,
-          [monsterId]: {
-            monsterId,
-            isVisible: true,
-            warningStartTime: now,
-            attackTime: monster.nextAttackTime,
-            isHolding: false,
-            blockStatus: blockStatus,
-          },
+          [monsterId]: blockState,
         },
       }));
+    } else {
+      console.log(
+        `❌ [CombatArenaLayout] Right-click failed for ${monster.name}: ${timeUntilAttack}ms until attack (outside window)`
+      );
     }
   };
 
@@ -562,6 +602,9 @@ export function CombatArenaLayout({
 
   // Monster Attack System
   const performMonsterAttack = (monster: EnhancedMonster) => {
+    console.log(
+      `🚨 [CombatArenaLayout] performMonsterAttack called for ${monster.name}`
+    );
     if (!combatManager.current) return;
 
     // Find a random alive party member to attack
@@ -574,9 +617,15 @@ export function CombatArenaLayout({
     // Store target health before attack for damage calculation
     const targetHealthBefore = target.currentHealth;
 
-    // Check for stored block status
-    const blockState = gameState.blockStates[monster.id];
+    // Check for stored block status (use ref for immediate access)
+    const blockState =
+      blockStatesRef.current[monster.id] || gameState.blockStates[monster.id];
     const blockStatus = blockState?.blockStatus || "none";
+
+    console.log(
+      `⚔️ [CombatArenaLayout] Monster ${monster.name} attacking ${target.name} with block status: ${blockStatus}`
+    );
+    console.log(`🔍 [CombatArenaLayout] Block state found:`, blockState);
 
     // Process the monster attack with block status
     combatManager.current.processMonsterAttack(
@@ -585,8 +634,21 @@ export function CombatArenaLayout({
       blockStatus
     );
 
-    // Clear block state after attack
-    combatManager.current.clearBlockState(monster.id);
+    // Clear block state from both ref and React state after attack
+    if (blockState) {
+      // Clear from ref
+      delete blockStatesRef.current[monster.id];
+
+      // Clear from React state
+      setGameState((prev) => {
+        const newBlockStates = { ...prev.blockStates };
+        delete newBlockStates[monster.id];
+        return {
+          ...prev,
+          blockStates: newBlockStates,
+        };
+      });
+    }
 
     // Calculate damage dealt
     const damageDealt = targetHealthBefore - target.currentHealth;

@@ -196,14 +196,23 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* Block Indicator */}
-      {monster.health > 0 && blockState?.isHolding && (
-        <div className="absolute bottom-2 left-2 right-2">
-          <div className="bg-green-500 text-white text-xs px-2 py-1 rounded text-center font-bold animate-pulse">
-            🛡️ BLOCKING
+      {/* Block/Parry Indicator */}
+      {monster.health > 0 &&
+        blockState?.blockStatus &&
+        blockState.blockStatus !== "none" && (
+          <div className="absolute bottom-2 left-2 right-2">
+            <div
+              className={`text-white text-xs px-2 py-1 rounded text-center font-bold animate-pulse ${
+                blockState.blockStatus === "parry"
+                  ? "bg-yellow-500"
+                  : "bg-green-500"
+              }`}
+            >
+              🛡️{" "}
+              {blockState.blockStatus === "parry" ? "PARRY SET" : "BLOCK SET"}
+            </div>
           </div>
-        </div>
-      )}
+        )}
     </div>
   );
 };
