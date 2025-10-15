@@ -106,7 +106,7 @@ export const statisticsRouter = createTRPCRouter({
           },
         },
         orderBy: {
-          completedAt: "desc",
+          missionEndTime: "desc",
         },
         take: input.limit,
       });
@@ -211,58 +211,5 @@ export const statisticsRouter = createTRPCRouter({
         mostEnemies: charStats.mostEnemiesInDungeon,
       },
     };
-  }),
-
-  // Get event type breakdown for character
-  getEventTypeBreakdown: protectedProcedure.query(async ({ ctx }) => {
-    const character = await ctx.db.character.findUnique({
-      where: { userId: ctx.session.user.id },
-    });
-
-    if (!character) {
-      throw new Error("Character not found");
-    }
-
-    // Get all dungeon statistics for this character's dungeons
-    const dungeonStats = await ctx.db.dungeonStatistics.findMany({
-      where: {
-        session: {
-          OR: [
-            {
-              party: {
-                members: {
-                  some: {
-                    characterId: character.id,
-                  },
-                },
-              },
-            },
-          ],
-        },
-      },
-    });
-
-    // Aggregate event type counts
-    const breakdown = {
-      combat: 0,
-      treasure: 0,
-      trap: 0,
-      puzzle: 0,
-      choice: 0,
-      rest: 0,
-      boss: 0,
-    };
-
-    for (const stats of dungeonStats) {
-      breakdown.combat += stats.combatEvents;
-      breakdown.treasure += stats.treasureEvents;
-      breakdown.trap += stats.trapEvents;
-      breakdown.puzzle += stats.puzzleEvents;
-      breakdown.choice += stats.choiceEvents;
-      breakdown.rest += stats.restEvents;
-      breakdown.boss += stats.bossEvents;
-    }
-
-    return breakdown;
   }),
 });

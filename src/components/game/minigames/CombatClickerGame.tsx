@@ -122,10 +122,9 @@ export function CombatClickerGame({
   };
 
   const getMonsterImageWithFallback = (monsterName: string): string => {
-    const imagePath = getMonsterImagePath(monsterName);
-    // For images that don't exist, fallback to training_dummy.png
-    // We'll handle this with onError in the img tag
-    return imagePath;
+    // For now, always use training dummy since we don't have monster images yet
+    // TODO: Create actual monster images and implement proper fallback
+    return "/assets/training_dummy.png";
   };
 
   // Get refetch function from context

@@ -140,6 +140,55 @@ export const npcRouter = createTRPCRouter({
     });
   }),
 
+  // Update NPC health (for real-time combat updates)
+  updateHealth: protectedProcedure
+    .input(
+      z.object({
+        npcId: z.string(),
+        newHealth: z.number().min(0),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      // Verify the NPC is hired by the current user's character
+      const character = await ctx.db.character.findFirst({
+        where: { userId: ctx.session.user.id },
+        include: {
+          party: {
+            include: {
+              members: {
+                where: {
+                  isNPC: true,
+                  npcCompanionId: input.npcId,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (
+        !character ||
+        !character.party ||
+        character.party.members.length === 0
+      ) {
+        throw new Error("NPC not found or access denied");
+      }
+
+      // Update the NPC's health
+      const updatedNPC = await ctx.db.nPCCompanion.update({
+        where: { id: input.npcId },
+        data: { currentHealth: input.newHealth },
+        select: {
+          id: true,
+          name: true,
+          currentHealth: true,
+          maxHealth: true,
+        },
+      });
+
+      return updatedNPC;
+    }),
+
   // Clean up expired hires (admin function)
   cleanupExpired: protectedProcedure.mutation(async () => {
     await NPCService.cleanupExpiredHires();

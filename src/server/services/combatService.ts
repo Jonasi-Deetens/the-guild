@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { LootService } from "./lootService";
 import { RewardService } from "./rewardService";
+import { PhaseManager } from "./phaseManager";
 
 interface CombatState {
   monsters: any[];
@@ -120,6 +121,9 @@ export class CombatService {
             `🎁 [CombatService] Total loot generated:`,
             generatedLoot
           );
+
+          // Check if this was a phase combat and complete the phase
+          await this.handlePhaseCompletion(event.sessionId, minigameResult);
 
           return {
             success: true,
@@ -336,25 +340,6 @@ export class CombatService {
   }
 
   /**
-   * Update combat state in database
-   */
-  static async updateCombatState(
-    eventId: string,
-    eventData: any,
-    combatState: CombatState
-  ): Promise<void> {
-    await db.dungeonEvent.update({
-      where: { id: eventId },
-      data: {
-        eventData: {
-          ...eventData,
-          combatState: combatState,
-        },
-      },
-    });
-  }
-
-  /**
    * Check if combat is complete (victory or defeat)
    */
   static checkCombatCompletion(
@@ -396,5 +381,46 @@ export class CombatService {
     const baseAttack = character.attack || 10;
     const levelModifier = 1 + enemyLevel * 0.1;
     return Math.floor(baseAttack * levelModifier);
+  }
+
+  /**
+   * Handle phase completion when all monsters in a phase are defeated
+   */
+  private static async handlePhaseCompletion(
+    sessionId: string,
+    minigameResult: any
+  ): Promise<void> {
+    try {
+      // Get current phase data
+      const phaseData = await PhaseManager.getCurrentPhase(sessionId);
+
+      if (!phaseData || !phaseData.currentPhase) {
+        console.log(
+          `⚠️ [CombatService] No current phase found for session ${sessionId}`
+        );
+        return;
+      }
+
+      const { currentPhase } = phaseData;
+
+      // Check if this is a phase combat (not a regular event)
+      if (currentPhase.status === "ACTIVE" && minigameResult.victory) {
+        console.log(
+          `🎯 [CombatService] Phase ${currentPhase.phaseNumber} completed for session ${sessionId}`
+        );
+
+        // Complete the current phase
+        await PhaseManager.completePhase(sessionId, currentPhase.phaseNumber);
+
+        console.log(
+          `✅ [CombatService] Phase ${currentPhase.phaseNumber} marked as completed`
+        );
+      }
+    } catch (error) {
+      console.error(
+        `❌ [CombatService] Error handling phase completion:`,
+        error
+      );
+    }
   }
 }

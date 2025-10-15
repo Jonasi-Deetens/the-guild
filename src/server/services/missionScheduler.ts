@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { EventSpawner } from "./eventSpawner";
+import { PhaseManager } from "./phaseManager";
 import { RewardService } from "./rewardService";
 import { LootService } from "./lootService";
 
@@ -58,6 +58,11 @@ export class MissionScheduler {
             },
           },
         },
+        phases: {
+          orderBy: {
+            phaseNumber: "asc",
+          },
+        },
       },
     });
 
@@ -91,50 +96,16 @@ export class MissionScheduler {
 
     const now = new Date();
 
-    // Check mission type specific logic
-    if (session.mission.missionType === "CLEAR") {
-      // For CLEAR missions, check if timer expired -> spawn boss
-      if (session.missionEndTime && now >= session.missionEndTime) {
-        await this.handleClearMissionTimeout(session);
-        return;
-      }
-
-      // Check fail condition
-      if (session.mission.failCondition === "DEATH_ONLY") {
-        if (await this.checkAllPlayersDead(session)) {
-          await this.handleMissionFailure(session, "All players died");
-          return;
-        }
-      }
-    } else {
-      // TIMED missions - original logic
-      if (session.missionEndTime && now >= session.missionEndTime) {
-        await this.handleMissionTimeout(session);
-        return;
-      }
-
-      if (await this.checkAllPlayersDead(session)) {
-        await this.handleMissionFailure(session, "All party members are dead");
-        return;
-      }
-    }
-
-    // Don't check timer expiry if mission is paused
-    if (session.pausedAt) {
-      console.log(`⏸️ Mission ${session.id} is paused during event`);
+    // Check if mission time has expired
+    if (session.missionEndTime && now >= session.missionEndTime) {
+      await this.handleMissionTimeout(session);
       return;
     }
 
-    // Check if it's time to spawn an event
-    console.log(
-      `🔍 Checking event spawn for session ${session.id}, status: ${session.status}, nextSpawnTime: ${session.nextEventSpawnTime}`
-    );
-    if (
-      !session.currentEventId &&
-      (await EventSpawner.checkForEventSpawn(session.id))
-    ) {
-      console.log(`🎲 Spawning event for session ${session.id}`);
-      await EventSpawner.spawnEvent(session.id);
+    // Check if all players are dead
+    if (await this.checkAllPlayersDead(session)) {
+      await this.handleMissionFailure(session, "All party members are dead");
+      return;
     }
 
     // Check for abandoned missions (no activity for 10+ minutes)
@@ -144,6 +115,46 @@ export class MissionScheduler {
 
     if (timeSinceActivity > tenMinutes) {
       await this.handleMissionAbandonment(session);
+    }
+
+    // Phase-based progression logic
+    await this.processPhaseProgression(session);
+  }
+
+  /**
+   * Process phase progression for a mission
+   */
+  private static async processPhaseProgression(session: any): Promise<void> {
+    const phaseData = await PhaseManager.getCurrentPhase(session.id);
+
+    if (!phaseData || !phaseData.currentPhase) {
+      console.log(`⚠️ No current phase found for session ${session.id}`);
+      return;
+    }
+
+    const { currentPhase, allPhases } = phaseData;
+
+    // If current phase is PENDING, start it
+    if (currentPhase.status === "PENDING") {
+      console.log(
+        `🚀 Starting phase ${currentPhase.phaseNumber} for session ${session.id}`
+      );
+      await PhaseManager.startPhase(session.id, currentPhase.phaseNumber);
+    }
+    // If current phase is COMPLETED and not the final phase, start rest period
+    else if (
+      currentPhase.status === "COMPLETED" &&
+      currentPhase.phaseNumber < session.mission.totalPhases
+    ) {
+      console.log(
+        `😴 Starting rest period for phase ${currentPhase.phaseNumber}`
+      );
+      await PhaseManager.startRestPeriod(session.id, currentPhase.phaseNumber);
+    }
+    // If all phases are completed, finish the mission
+    else if (await PhaseManager.checkMissionCompletion(session.id)) {
+      console.log(`🎉 All phases completed for session ${session.id}`);
+      await this.handleMissionSuccess(session);
     }
   }
 
@@ -157,7 +168,7 @@ export class MissionScheduler {
       where: { id: session.id },
       data: {
         status: "FAILED",
-        completedAt: new Date(),
+        missionEndTime: new Date(),
       },
     });
 
@@ -183,7 +194,7 @@ export class MissionScheduler {
       where: { id: session.id },
       data: {
         status: "FAILED",
-        completedAt: new Date(),
+        missionEndTime: new Date(),
       },
     });
 
@@ -197,57 +208,29 @@ export class MissionScheduler {
   }
 
   /**
-   * Handle mission abandonment
+   * Handle mission success
    */
-  private static async handleMissionAbandonment(session: any): Promise<void> {
-    console.log(`🚪 Mission ${session.id} abandoned due to inactivity`);
+  private static async handleMissionSuccess(session: any): Promise<void> {
+    console.log(`🎉 Mission ${session.id} completed successfully`);
 
     await db.dungeonSession.update({
       where: { id: session.id },
       data: {
-        status: "ABANDONED",
-        completedAt: new Date(),
-      },
-    });
-
-    // Rollback incomplete rewards
-    await RewardService.rollbackIncompleteRewards(session.id);
-
-    // Notify party members
-    await this.notifyMissionFailure(
-      session,
-      "Mission abandoned due to inactivity"
-    );
-  }
-
-  /**
-   * Handle mission completion
-   */
-  static async handleMissionCompletion(sessionId: string): Promise<void> {
-    const session = await db.dungeonSession.findUnique({
-      where: { id: sessionId },
-      include: { mission: true },
-    });
-
-    if (!session) {
-      return;
-    }
-
-    console.log(`🎉 Mission ${sessionId} completed successfully`);
-
-    await db.dungeonSession.update({
-      where: { id: sessionId },
-      data: {
         status: "COMPLETED",
-        completedAt: new Date(),
+        missionEndTime: new Date(),
       },
     });
 
-    // Apply mission completion rewards
-    await RewardService.applyMissionCompletionRewards(sessionId);
+    console.log(`✅ Mission ${session.id} status updated to COMPLETED`);
+
+    // Apply rewards
+    await RewardService.applyMissionCompletionRewards(session.id);
+
+    // Generate loot
+    await LootService.generateMissionLoot(session.id);
 
     // Notify party members
-    await this.notifyMissionSuccess(session, "Mission completed successfully");
+    await this.notifyMissionSuccess(session);
   }
 
   /**
@@ -297,9 +280,9 @@ export class MissionScheduler {
       },
     });
 
-    // Initialize event spawning
-    console.log(`🎯 Initializing event spawning for mission ${sessionId}`);
-    await EventSpawner.initializeMission(sessionId);
+    // Initialize phases for the mission
+    console.log(`🎯 Initializing phases for mission ${sessionId}`);
+    await PhaseManager.initializePhases(sessionId);
 
     console.log(
       `🎯 Started mission ${sessionId}, duration: ${
@@ -315,7 +298,6 @@ export class MissionScheduler {
     status: string;
     remainingTime: number;
     isPaused: boolean;
-    currentEventId: string | null;
   } | null> {
     const session = await db.dungeonSession.findUnique({
       where: { id: sessionId },
@@ -345,105 +327,7 @@ export class MissionScheduler {
       status: session.status,
       remainingTime: Math.floor(remainingTime / 1000),
       isPaused: isPaused,
-      currentEventId: session.currentEventId,
     };
-  }
-
-  /**
-   * Pause mission timer (for events)
-   */
-  static async pauseMissionTimer(sessionId: string): Promise<void> {
-    await db.dungeonSession.update({
-      where: { id: sessionId },
-      data: {
-        pausedAt: new Date(),
-      },
-    });
-  }
-
-  /**
-   * Resume mission timer (after events)
-   */
-  static async resumeMissionTimer(sessionId: string): Promise<void> {
-    const session = await db.dungeonSession.findUnique({
-      where: { id: sessionId },
-    });
-
-    if (!session || !session.pausedAt) {
-      return;
-    }
-
-    const pauseDuration = Math.floor(
-      (Date.now() - session.pausedAt.getTime()) / 1000
-    );
-
-    await db.dungeonSession.update({
-      where: { id: sessionId },
-      data: {
-        pausedAt: null,
-        totalPausedTime: session.totalPausedTime + pauseDuration,
-      },
-    });
-  }
-
-  /**
-   * Handle CLEAR mission timeout (spawn boss instead of failing)
-   */
-  private static async handleClearMissionTimeout(session: any): Promise<void> {
-    // Double-check that the session is still ACTIVE
-    const currentSession = await db.dungeonSession.findUnique({
-      where: { id: session.id },
-      select: { status: true },
-    });
-
-    if (!currentSession || currentSession.status !== "ACTIVE") {
-      console.log(
-        `⏭️ Skipping boss spawn for mission ${session.id} - status is ${
-          currentSession?.status || "not found"
-        }`
-      );
-      return;
-    }
-
-    console.log(`⏰ CLEAR Mission ${session.id} timer expired - spawning boss`);
-
-    // Check if boss already exists (any status)
-    const existingBossEvent = await db.dungeonEvent.findFirst({
-      where: {
-        sessionId: session.id,
-        template: {
-          type: "COMBAT",
-        },
-      },
-    });
-
-    // Check if the found event is a boss fight
-    const isBossEvent =
-      existingBossEvent &&
-      existingBossEvent.eventData &&
-      typeof existingBossEvent.eventData === "object" &&
-      (existingBossEvent.eventData as any).isBossFight === true;
-
-    if (isBossEvent) {
-      console.log(`⏰ Boss event already exists for mission ${session.id}`);
-      return;
-    }
-
-    // Spawn boss if configured
-    if (session.mission.bossTemplateId) {
-      const { EventSpawner } = await import("./eventSpawner");
-      await EventSpawner.spawnCombatEvent(
-        session.id,
-        session.mission.bossTemplateId,
-        true // isBossFight = true
-      );
-    } else {
-      // No boss - complete mission
-      await this.handleMissionSuccess(
-        session,
-        "Mission completed - no boss to fight"
-      );
-    }
   }
 
   /**
@@ -481,150 +365,6 @@ export class MissionScheduler {
       }
 
       return false;
-    }
-  }
-
-  /**
-   * Handle mission success
-   */
-  public static async handleMissionSuccess(
-    session: any,
-    reason: string
-  ): Promise<void> {
-    console.log(`✅ Mission ${session.id} completed successfully: ${reason}`);
-    console.log(`🔍 handleMissionSuccess called with session:`, {
-      id: session.id,
-      status: session.status,
-      missionId: session.missionId,
-    });
-
-    await db.dungeonSession.update({
-      where: { id: session.id },
-      data: {
-        status: "COMPLETED",
-        completedAt: new Date(),
-      },
-    });
-
-    // Apply final rewards
-    const { RewardService } = await import("./rewardService");
-    await RewardService.applyMissionCompletionRewards(session.id);
-
-    // Claim loot for all characters in the session
-    await this.claimLootForSession(session.id);
-
-    // Notify party members
-    await this.notifyMissionSuccess(session, reason);
-  }
-
-  /**
-   * Distribute loot for all characters in the session
-   */
-  private static async claimLootForSession(sessionId: string): Promise<void> {
-    console.log(`🎁 Distributing loot for session ${sessionId}`);
-
-    try {
-      // Import the new loot distribution service
-      const { LootDistributionService } = await import(
-        "./lootDistributionService"
-      );
-
-      // Use the new loot distribution system
-      const result = await LootDistributionService.distributeLoot(sessionId);
-
-      if (result.success) {
-        console.log(`✅ Loot distribution completed: ${result.message}`);
-      } else {
-        console.error(`❌ Loot distribution failed: ${result.message}`);
-      }
-    } catch (error) {
-      console.error(
-        `❌ Failed to distribute loot for session ${sessionId}:`,
-        error
-      );
-
-      // Fallback to old system if new system fails
-      console.log(`🔄 Falling back to old loot claiming system...`);
-      await this.claimLootForSessionLegacy(sessionId);
-    }
-  }
-
-  /**
-   * Legacy loot claiming system (fallback)
-   */
-  private static async claimLootForSessionLegacy(
-    sessionId: string
-  ): Promise<void> {
-    console.log(`🎁 Using legacy loot claiming for session ${sessionId}`);
-
-    // Get the session with party members
-    const session = await db.dungeonSession.findUnique({
-      where: { id: sessionId },
-      include: {
-        party: {
-          include: {
-            members: {
-              include: {
-                character: true,
-              },
-            },
-          },
-        },
-      },
-    });
-
-    if (!session) {
-      console.error(`❌ Session ${sessionId} not found for loot claiming`);
-      return;
-    }
-
-    if (session.party) {
-      // Party mission - claim loot for each member
-      for (const member of session.party.members) {
-        // Only claim loot for player characters (not NPCs)
-        if (member.character) {
-          try {
-            const claimedLoot = await LootService.claimLoot(
-              sessionId,
-              member.character.id
-            );
-            console.log(
-              `✅ Claimed ${claimedLoot.length} loot items for character ${member.character.name}`
-            );
-          } catch (error) {
-            console.error(
-              `❌ Failed to claim loot for character ${member.character.id}:`,
-              error
-            );
-          }
-        }
-      }
-    } else {
-      // Solo mission - get the character from the session
-      const character = await db.character.findFirst({
-        where: {
-          user: {
-            id: session.userId,
-          },
-        },
-      });
-
-      if (character) {
-        try {
-          const claimedLoot = await LootService.claimLoot(
-            sessionId,
-            character.id
-          );
-          console.log(
-            `✅ Claimed ${claimedLoot.length} loot items for solo character ${character.name}`
-          );
-        } catch (error) {
-          console.error(
-            `❌ Failed to claim loot for solo character ${character.id}:`,
-            error
-          );
-        }
-      }
     }
   }
 

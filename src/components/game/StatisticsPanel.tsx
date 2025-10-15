@@ -30,8 +30,6 @@ export function StatisticsPanel({ isOpen, onClose }: StatisticsPanelProps) {
   // Fetch statistics data with refetch on open
   const { data: performanceSummary, refetch: refetchPerformance } =
     api.statistics.getPerformanceSummary.useQuery();
-  const { data: eventBreakdown, refetch: refetchEventBreakdown } =
-    api.statistics.getEventTypeBreakdown.useQuery();
   const { data: recentDungeons, refetch: refetchRecentDungeons } =
     api.statistics.getRecentDungeons.useQuery({
       limit: 5,
@@ -46,17 +44,10 @@ export function StatisticsPanel({ isOpen, onClose }: StatisticsPanelProps) {
   React.useEffect(() => {
     if (isOpen) {
       refetchPerformance();
-      refetchEventBreakdown();
       refetchRecentDungeons();
       refetchLeaderboard();
     }
-  }, [
-    isOpen,
-    refetchPerformance,
-    refetchEventBreakdown,
-    refetchRecentDungeons,
-    refetchLeaderboard,
-  ]);
+  }, [isOpen, refetchPerformance, refetchRecentDungeons, refetchLeaderboard]);
 
   if (!isOpen) return null;
 
@@ -221,76 +212,6 @@ export function StatisticsPanel({ isOpen, onClose }: StatisticsPanelProps) {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* Event Type Breakdown */}
-              <Card className="glass">
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <BarChart3 className="h-5 w-5" />
-                    <span>Event Type Breakdown</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {[
-                      {
-                        key: "combat",
-                        label: "Combat",
-                        color: "text-red-400",
-                        icon: Sword,
-                      },
-                      {
-                        key: "treasure",
-                        label: "Treasure",
-                        color: "text-yellow-400",
-                        icon: Coins,
-                      },
-                      {
-                        key: "trap",
-                        label: "Traps",
-                        color: "text-orange-400",
-                        icon: AlertTriangle,
-                      },
-                      {
-                        key: "puzzle",
-                        label: "Puzzles",
-                        color: "text-blue-400",
-                        icon: Target,
-                      },
-                      {
-                        key: "choice",
-                        label: "Choices",
-                        color: "text-green-400",
-                        icon: Users,
-                      },
-                      {
-                        key: "rest",
-                        label: "Rest",
-                        color: "text-purple-400",
-                        icon: Heart,
-                      },
-                      {
-                        key: "boss",
-                        label: "Bosses",
-                        color: "text-red-600",
-                        icon: Trophy,
-                      },
-                    ].map((event) => (
-                      <div key={event.key} className="text-center">
-                        <event.icon
-                          className={`h-6 w-6 mx-auto mb-2 ${event.color}`}
-                        />
-                        <p className={`text-xl font-bold ${event.color}`}>
-                          {eventBreakdown?.[
-                            event.key as keyof typeof eventBreakdown
-                          ] || 0}
-                        </p>
-                        <p className="text-sm text-gray-400">{event.label}</p>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           )}
 
@@ -321,9 +242,9 @@ export function StatisticsPanel({ isOpen, onClose }: StatisticsPanelProps) {
                             {dungeon.mission.name}
                           </h4>
                           <p className="text-sm text-gray-400">
-                            {dungeon.completedAt
+                            {dungeon.missionEndTime
                               ? new Date(
-                                  dungeon.completedAt
+                                  dungeon.missionEndTime
                                 ).toLocaleDateString()
                               : "In Progress"}
                           </p>

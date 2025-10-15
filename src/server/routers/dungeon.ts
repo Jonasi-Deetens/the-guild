@@ -149,17 +149,9 @@ export const dungeonRouter = createTRPCRouter({
               },
             },
           },
-          events: {
-            include: {
-              template: true,
-              playerActions: {
-                include: {
-                  character: true,
-                },
-              },
-            },
+          phases: {
             orderBy: {
-              eventNumber: "asc",
+              phaseNumber: "asc",
             },
           },
         },
@@ -196,16 +188,7 @@ export const dungeonRouter = createTRPCRouter({
         // For now, we'll allow access
       }
 
-      // Find the current active event
-      const currentEvent = session.events.find(
-        (event) =>
-          event.id === session.currentEventId && event.status === "ACTIVE"
-      );
-
-      return {
-        ...session,
-        currentEvent: currentEvent || null,
-      };
+      return session;
     }),
 
   // Start mission
@@ -281,25 +264,6 @@ export const dungeonRouter = createTRPCRouter({
       }
 
       return await dungeonEngine.getMissionStatus(input.sessionId);
-    }),
-
-  // Get current event
-  getCurrentEvent: protectedProcedure
-    .input(
-      z.object({
-        sessionId: z.string(),
-      })
-    )
-    .query(async ({ ctx, input }) => {
-      const character = await ctx.db.character.findUnique({
-        where: { userId: ctx.session.user.id },
-      });
-
-      if (!character) {
-        throw new Error("Character not found");
-      }
-
-      return await dungeonEngine.getCurrentEvent(input.sessionId);
     }),
 
   // Get available missions
@@ -418,7 +382,7 @@ export const dungeonRouter = createTRPCRouter({
         where: { id: input.sessionId },
         data: {
           status: "ABANDONED",
-          completedAt: new Date(),
+          missionEndTime: new Date(),
         },
       });
 

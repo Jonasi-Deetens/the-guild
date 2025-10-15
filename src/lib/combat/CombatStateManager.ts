@@ -25,7 +25,7 @@ export interface EnhancedMonster {
   defense: number;
   attackInterval: number;
   nextAttackTime: number;
-  abilities?: any;
+  abilities?: unknown;
   description?: string;
 }
 
@@ -88,7 +88,17 @@ export class CombatStateManager {
   /**
    * Initialize combat with party members and monster configurations
    */
-  initializeCombat(partyMembers: CombatPartyMember[]): void {
+  initializeCombat(
+    monsters: EnhancedMonster[],
+    partyMembers: CombatPartyMember[]
+  ): void {
+    // Initialize monsters
+    this.monsters = monsters.map((monster) => ({
+      ...monster,
+      health: monster.health || monster.maxHealth,
+    }));
+
+    // Initialize party members
     this.party = partyMembers.map((member) => ({
       ...member,
       currentHealth: member.currentHealth || member.maxHealth,
@@ -163,80 +173,6 @@ export class CombatStateManager {
     }
 
     return actualDamage;
-  }
-
-  /**
-   * Process monster attack on a party member
-   */
-  processMonsterAttack(
-    monsterId: string,
-    targetId: string,
-    blockStatus: "none" | "block" | "parry"
-  ): { damage: number; isBlocked: boolean; isParried: boolean } {
-    const monster = this.monsters.find((m) => m.id === monsterId);
-    const target = this.party.find((p) => p.id === targetId);
-
-    if (!monster || !target || target.isDead) {
-      return { damage: 0, isBlocked: false, isParried: false };
-    }
-
-    const isBlocking = blockStatus === "block";
-    const isParry = blockStatus === "parry";
-
-    const damage = this.calculateDamage(
-      monster,
-      target,
-      isBlocking,
-      isParry,
-      target.blockStrength
-    );
-
-    // Apply damage
-    const newHealth = Math.max(0, target.currentHealth - damage);
-    target.currentHealth = newHealth;
-
-    target.isDead = newHealth === 0;
-
-    // Update stats
-    this.totalDamageTaken[targetId] =
-      (this.totalDamageTaken[targetId] || 0) + damage;
-
-    if (isBlocking) {
-      this.totalBlocks++;
-    }
-    if (isParry) {
-      this.totalParries++;
-      this.totalPerfectParries++;
-    }
-
-    // Log damage event
-    this.addDamageEvent({
-      type: "damage_taken",
-      amount: damage,
-      source: monster.name,
-      target: target.name,
-      timestamp: Date.now(),
-    });
-
-    if (isParry) {
-      this.addDamageEvent({
-        type: "parry",
-        amount: 0,
-        source: target.name,
-        target: monster.name,
-        timestamp: Date.now(),
-      });
-    } else if (isBlocking) {
-      this.addDamageEvent({
-        type: "block",
-        amount: damage,
-        source: target.name,
-        target: monster.name,
-        timestamp: Date.now(),
-      });
-    }
-
-    return { damage, isBlocked: isBlocking, isParried: isParry };
   }
 
   /**
@@ -335,49 +271,6 @@ export class CombatStateManager {
   }
 
   /**
-   * Show block button for a monster (2 seconds before attack)
-   */
-  showBlockButton(monsterId: string): void {
-    const monster = this.monsters.find((m) => m.id === monsterId);
-    if (!monster) return;
-
-    const now = Date.now();
-    const warningTime = 2000; // 2 seconds warning
-    const attackTime = now + warningTime;
-
-    // Clear any previous block status when showing new block button
-    this.clearBlockStatus(monsterId);
-
-    this.blockStates[monsterId] = {
-      monsterId,
-      isVisible: true,
-      warningStartTime: now,
-      attackTime,
-      isHolding: false,
-    };
-  }
-
-  /**
-   * Hide block button for a monster
-   */
-  hideBlockButton(monsterId: string): void {
-    if (this.blockStates[monsterId]) {
-      this.blockStates[monsterId].isVisible = false;
-      this.blockStates[monsterId].isHolding = false;
-    }
-  }
-
-  /**
-   * Clear block status for a monster (after attack is processed)
-   */
-  clearBlockStatus(monsterId: string): void {
-    if (this.blockStates[monsterId]) {
-      this.blockStates[monsterId].blockStatus = "none";
-      this.blockStates[monsterId].clickTime = undefined;
-    }
-  }
-
-  /**
    * Register a block attempt (called when player clicks block button)
    */
   registerBlockAttempt(monsterId: string, clickTime: number): void {
@@ -397,13 +290,6 @@ export class CombatStateManager {
   /**
    * Set next attack time for a monster
    */
-  setNextAttackTime(monsterId: string): void {
-    const monster = this.monsters.find((m) => m.id === monsterId);
-    if (monster) {
-      const nextAttackTime = Date.now() + monster.attackInterval * 1000; // Convert seconds to milliseconds
-      monster.nextAttackTime = nextAttackTime;
-    }
-  }
 
   /**
    * Get current block timing state for visual feedback
@@ -575,43 +461,192 @@ export class CombatStateManager {
   /**
    * Restore state from saved combat data
    */
-  restoreState(savedState: any): void {
-    if (savedState.monsters) {
-      this.monsters = savedState.monsters;
+  restoreState(savedState: unknown): void {
+    if (!savedState || typeof savedState !== "object") return;
+
+    const state = savedState as Record<string, unknown>;
+
+    if (state.monsters && Array.isArray(state.monsters)) {
+      this.monsters = state.monsters as EnhancedMonster[];
     }
 
-    if (savedState.party) {
-      this.party = savedState.party;
+    if (state.party && Array.isArray(state.party)) {
+      this.party = state.party as CombatPartyMember[];
     }
 
-    if (savedState.turnCount !== undefined) {
-      this.turnCount = savedState.turnCount;
+    if (typeof state.turnCount === "number") {
+      this.turnCount = state.turnCount;
     }
 
-    if (savedState.playerDamageDealt !== undefined) {
-      this.totalDamageDealt = savedState.playerDamageDealt;
+    if (typeof state.playerDamageDealt === "number") {
+      this.totalDamageDealt = state.playerDamageDealt;
     }
 
-    if (savedState.enemyDamageDealt !== undefined) {
+    if (state.enemyDamageDealt && typeof state.enemyDamageDealt === "object") {
       // enemyDamageDealt should be a Record<string, number> (damage taken per player)
-      this.totalDamageTaken = savedState.enemyDamageDealt;
+      this.totalDamageTaken = state.enemyDamageDealt as Record<string, number>;
     }
 
-    if (savedState.monstersDefeated !== undefined) {
-      this.monstersDefeated = savedState.monstersDefeated;
+    if (typeof state.monstersDefeated === "number") {
+      this.monstersDefeated = state.monstersDefeated;
     }
 
-    if (savedState.partyHealthUpdates) {
+    if (
+      state.partyHealthUpdates &&
+      typeof state.partyHealthUpdates === "object"
+    ) {
       // Update party health from saved state
-      Object.entries(savedState.partyHealthUpdates).forEach(
-        ([memberId, health]) => {
-          const member = this.party.find((p) => p.id === memberId);
-          if (member) {
-            member.currentHealth = health as number;
-            member.isDead = health <= 0;
-          }
+      Object.entries(
+        state.partyHealthUpdates as Record<string, unknown>
+      ).forEach(([memberId, health]) => {
+        const member = this.party.find((p) => p.id === memberId);
+        if (member && typeof health === "number") {
+          member.currentHealth = health;
+          member.isDead = health <= 0;
         }
+      });
+    }
+  }
+
+  /**
+   * Show block button for monster attack
+   */
+  showBlockButton(monsterId: string): void {
+    const monster = this.monsters.find((m) => m.id === monsterId);
+    if (!monster) return;
+
+    const now = Date.now();
+    const attackTime = monster.nextAttackTime;
+
+    this.blockStates[monsterId] = {
+      monsterId,
+      isVisible: true,
+      warningStartTime: now,
+      attackTime,
+      isHolding: false,
+    };
+  }
+
+  /**
+   * Set next attack time for a monster
+   */
+  setNextAttackTime(monsterId: string): void {
+    const monster = this.monsters.find((m) => m.id === monsterId);
+    if (!monster) return;
+
+    const now = Date.now();
+    const baseInterval = monster.attackInterval * 1000; // Convert to milliseconds
+    const variance = baseInterval * 0.2; // 20% variance
+    const randomVariance = (Math.random() - 0.5) * variance;
+    const nextAttackTime = now + baseInterval + randomVariance;
+
+    monster.nextAttackTime = nextAttackTime;
+  }
+
+  /**
+   * Handle block button click
+   */
+  handleBlockClick(monsterId: string): void {
+    const blockState = this.blockStates[monsterId];
+    if (!blockState || !blockState.isVisible) return;
+
+    blockState.isHolding = true;
+    blockState.clickTime = Date.now();
+  }
+
+  /**
+   * Handle block button release
+   */
+  handleBlockRelease(monsterId: string): void {
+    const blockState = this.blockStates[monsterId];
+    if (!blockState) return;
+
+    blockState.isHolding = false;
+  }
+
+  /**
+   * Process monster attack with block/parry mechanics
+   */
+  processMonsterAttack(
+    monsterId: string,
+    targetId?: string,
+    blockStatus?: "none" | "block" | "parry"
+  ): void {
+    const monster = this.monsters.find((m) => m.id === monsterId);
+    const blockState = this.blockStates[monsterId];
+
+    if (!monster) return;
+
+    // Find target (use provided targetId or pick random)
+    let target;
+    if (targetId) {
+      target = this.party.find(
+        (member) => member.id === targetId && !member.isDead
       );
+    }
+
+    if (!target) {
+      const aliveMembers = this.party.filter((member) => !member.isDead);
+      if (aliveMembers.length === 0) return;
+      target = aliveMembers[Math.floor(Math.random() * aliveMembers.length)];
+    }
+
+    // Calculate damage
+    const baseDamage = Math.max(1, monster.attack - target.defense);
+    const damage = Math.floor(baseDamage * (0.8 + Math.random() * 0.4)); // 80-120% damage
+
+    // Apply block/parry effects
+    let finalDamage = damage;
+
+    if (blockStatus === "parry") {
+      finalDamage = 0;
+      this.totalPerfectParries++;
+
+      this.addDamageEvent({
+        type: "parry",
+        amount: 0,
+        source: monster.name,
+        target: target.name,
+        timestamp: Date.now(),
+      });
+    } else if (blockStatus === "block") {
+      finalDamage = Math.floor(damage * 0.3); // 70% damage reduction
+      this.totalBlocks++;
+
+      this.addDamageEvent({
+        type: "block",
+        amount: finalDamage,
+        source: monster.name,
+        target: target.name,
+        timestamp: Date.now(),
+      });
+    }
+
+    // Apply damage
+    if (finalDamage > 0) {
+      target.currentHealth = Math.max(0, target.currentHealth - finalDamage);
+
+      if (target.currentHealth <= 0) {
+        target.isDead = true;
+      }
+
+      this.addDamageEvent({
+        type: "damage_taken",
+        amount: finalDamage,
+        source: monster.name,
+        target: target.name,
+        timestamp: Date.now(),
+      });
+
+      // Update damage taken tracking
+      this.totalDamageTaken[target.id] =
+        (this.totalDamageTaken[target.id] || 0) + finalDamage;
+    }
+
+    // Hide block button
+    if (blockState) {
+      blockState.isVisible = false;
+      blockState.isHolding = false;
     }
   }
 }

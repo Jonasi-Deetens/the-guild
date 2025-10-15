@@ -1,20 +1,8 @@
 "use client";
 
-import { JumpingGapsGame } from "./JumpingGapsGame";
-import { ClosingWallsGame } from "./ClosingWallsGame";
-import { LockPickingGame } from "./LockPickingGame";
-import { RiddleGame } from "./RiddleGame";
-import { QuickTimeGame } from "./QuickTimeGame";
 import { CombatClickerGame } from "./CombatClickerGame";
 
-export type MinigameType =
-  | "JUMPING_GAPS"
-  | "CLOSING_WALLS"
-  | "LOCK_PICKING"
-  | "RIDDLE"
-  | "QUICK_TIME"
-  | "COMBAT_CLICKER"
-  | "NONE";
+export type MinigameType = "COMBAT_CLICKER" | "NONE";
 
 interface MinigameContainerProps {
   type: MinigameType;
@@ -52,46 +40,6 @@ export function MinigameContainer({
   event,
 }: MinigameContainerProps) {
   switch (type) {
-    case "JUMPING_GAPS":
-      return (
-        <JumpingGapsGame
-          config={config}
-          playerStats={playerStats}
-          onComplete={onComplete}
-        />
-      );
-    case "CLOSING_WALLS":
-      return (
-        <ClosingWallsGame
-          config={config}
-          playerStats={playerStats}
-          onComplete={onComplete}
-        />
-      );
-    case "LOCK_PICKING":
-      return (
-        <LockPickingGame
-          config={config}
-          playerStats={playerStats}
-          onComplete={onComplete}
-        />
-      );
-    case "RIDDLE":
-      return (
-        <RiddleGame
-          config={config}
-          playerStats={playerStats}
-          onComplete={onComplete}
-        />
-      );
-    case "QUICK_TIME":
-      return (
-        <QuickTimeGame
-          config={config}
-          playerStats={playerStats}
-          onComplete={onComplete}
-        />
-      );
     case "COMBAT_CLICKER":
       return (
         <CombatClickerGame
@@ -121,21 +69,10 @@ export function getMinigameTypeForEvent(event: {
     return event.template.minigameType as MinigameType;
   }
 
-  // Fallback to default mapping based on event type
+  // Only combat events use minigames now
   switch (event.type) {
     case "COMBAT":
       return "COMBAT_CLICKER";
-    case "TRAP":
-      return "QUICK_TIME";
-    case "PUZZLE":
-      return "RIDDLE";
-    case "TREASURE":
-      return "LOCK_PICKING";
-    case "ENVIRONMENTAL_HAZARD":
-      return "CLOSING_WALLS";
-    case "CHOICE":
-    case "NPC_ENCOUNTER":
-    case "REST":
     default:
       return "NONE";
   }

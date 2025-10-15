@@ -14,8 +14,7 @@ interface DungeonSession {
   missionEndTime: string | null;
   pausedAt: string | null;
   totalPausedTime: number;
-  nextEventSpawnTime: string | null;
-  currentEventId: string | null;
+  currentPhaseNumber: number;
   mission: {
     name: string;
     description: string;
@@ -24,6 +23,10 @@ interface DungeonSession {
     experienceReward: number;
     baseDuration: number;
     environmentType: string;
+    totalPhases: number;
+    finalBossTemplateId: string | null;
+    monsterPoolIds: string[];
+    restDuration: number;
   };
   party?: {
     members: Array<{
@@ -37,29 +40,31 @@ interface DungeonSession {
         defense: number;
         speed: number;
         perception: number;
-      };
+      } | null;
+      npcCompanion: {
+        id: string;
+        name: string;
+        level: number;
+        currentHealth: number;
+        maxHealth: number;
+        attack: number;
+        defense: number;
+        speed: number;
+        perception: number;
+      } | null;
       isReady: boolean;
+      isNPC: boolean;
     }>;
   };
-  events: Array<{
+  phases: Array<{
     id: string;
+    phaseNumber: number;
     status: string;
-    eventNumber: number;
-    eventData: any;
-    results: any;
-    template: {
-      type: string;
-      name: string;
-      description: string;
-      minigameType?: string;
-      config?: any;
-    };
-    playerActions: Array<{
-      characterId: string;
-      actionType: string;
-      actionData: any;
-      result: any;
-    }>;
+    monstersSpawned: any;
+    startedAt: string | null;
+    completedAt: string | null;
+    restStartedAt: string | null;
+    restEndedAt: string | null;
   }>;
 }
 
@@ -93,7 +98,8 @@ interface PlayerStats {
 interface DungeonSessionContextType {
   // Data
   session: DungeonSession | null;
-  currentEvent: any;
+  currentPhase: any;
+  phaseStatus: string;
   characterData: any;
   partyChat: ChatMessage[];
 
@@ -151,6 +157,19 @@ export function DungeonSessionProvider({
     }
   );
 
+  // Fetch current phase data
+  const {
+    data: phaseData,
+    refetch: refetchPhase,
+    isLoading: phaseLoading,
+  } = api.phase.getCurrentPhase.useQuery(
+    { sessionId },
+    {
+      enabled: !!sessionId,
+      refetchInterval: 2000, // Poll every 2 seconds for phase updates
+    }
+  );
+
   // Fetch current character data
   const {
     data: characterData,
@@ -177,23 +196,33 @@ export function DungeonSessionProvider({
   // Computed values
   const session = sessionData as DungeonSession | null;
 
-  const currentEvent = useMemo(() => {
-    if (!session) return null;
+  const currentPhase = useMemo(() => {
+    if (!phaseData) return null;
+    return phaseData.currentPhase || null;
+  }, [phaseData]);
 
-    const found = session.events.find(
-      (event) =>
-        event.id === session.currentEventId && event.status === "ACTIVE"
-    );
+  // Auto-show minigame when phase becomes active
+  useEffect(() => {
+    if (
+      currentPhase &&
+      currentPhase.status === "ACTIVE" &&
+      currentPhase.monstersSpawned &&
+      currentPhase.monstersSpawned.length > 0
+    ) {
+      setShowMinigame(true);
+    }
+  }, [currentPhase]);
 
-    return found || null;
-  }, [session]);
+  const phaseStatus = useMemo(() => {
+    if (!currentPhase) return "PENDING";
+    return currentPhase.status || "PENDING";
+  }, [currentPhase]);
 
   const hasPlayerSubmittedAction = useMemo(() => {
-    if (!currentEvent || !characterData) return false;
-    return currentEvent.playerActions.some(
-      (action: any) => action.characterId === characterData.id
-    );
-  }, [currentEvent, characterData]);
+    // For phase-based system, we don't track individual action submissions
+    // The minigame completion handles the action submission
+    return false;
+  }, []);
 
   // Update session state when data changes
   useEffect(() => {
@@ -234,27 +263,12 @@ export function DungeonSessionProvider({
         .map((member) => {
           // Handle NPCs
           if (member.isNPC && member.npcCompanion) {
-            // Check if there's an active combat event with health updates
-            let currentHealth = member.npcCompanion.maxHealth; // Default to full health
-            let isDead = false;
-
-            if (session.currentEventId) {
-              // Look for health updates in the current event's combat state
-              const eventData = session.currentEvent?.eventData;
-              if (eventData?.combatState?.partyHealthUpdates) {
-                const healthUpdate =
-                  eventData.combatState.partyHealthUpdates[
-                    member.npcCompanion.id
-                  ];
-                if (healthUpdate !== undefined) {
-                  currentHealth = Math.max(
-                    0,
-                    member.npcCompanion.maxHealth + healthUpdate
-                  );
-                  isDead = currentHealth <= 0;
-                }
-              }
-            }
+            // For phase-based system, NPCs maintain their health from the database
+            // Health updates are handled by the combat system and persisted to the database
+            let currentHealth =
+              member.npcCompanion.currentHealth ||
+              member.npcCompanion.maxHealth;
+            let isDead = currentHealth <= 0;
 
             // Calculate attack interval based on speed (faster speed = shorter interval)
             const baseAttackInterval = 6.0; // Base 6 seconds (even slower)
@@ -360,17 +374,19 @@ export function DungeonSessionProvider({
     return Math.floor(timeLeft / 1000);
   }, [session]);
 
-  const isLoading = sessionLoading || characterLoading;
+  const isLoading = sessionLoading || characterLoading || phaseLoading;
 
   // Actions
   const refetchAll = () => {
     refetchSession();
     refetchCharacter();
+    refetchPhase();
   };
 
   const submitAction = (action: string, actionData: any) => {
-    if (!currentEvent || !characterData) return;
+    if (!characterData) return;
 
+    // For phase-based system, we submit actions directly to the dungeon engine
     submitActionMutation.mutate({
       sessionId,
       action,
@@ -396,7 +412,8 @@ export function DungeonSessionProvider({
   const value: DungeonSessionContextType = {
     // Data
     session,
-    currentEvent,
+    currentPhase,
+    phaseStatus,
     characterData,
     partyChat,
 

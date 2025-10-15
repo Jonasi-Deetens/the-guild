@@ -355,7 +355,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-64 flex flex-col h-screen">
+      <div className="lg:ml-64 flex flex-col h-screen w-full">
         {/* Top bar */}
         <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">

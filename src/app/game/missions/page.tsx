@@ -658,7 +658,7 @@ export default function MissionsPage() {
                   disabled={
                     (selectedMission.minPlayers > 1 && !myCurrentParty) ||
                     (selectedMission.minPlayers > 1 &&
-                      myCurrentParty.leaderId !== character?.id) ||
+                      myCurrentParty?.leaderId !== character?.id) ||
                     startPartySessionMutation.isPending ||
                     startSoloSessionMutation.isPending
                   }

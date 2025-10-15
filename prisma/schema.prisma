@@ -55,44 +55,43 @@ model VerificationToken {
 }
 
 model Character {
-  id                    String                @id @default(cuid())
-  name                  String                @unique
-  level                 Int                   @default(1)
-  experience            Int                   @default(0)
-  gold                  Int                   @default(100)
-  reputation            Int                   @default(0)
-  currentHealth         Int                   @default(100)
-  maxHealth             Int                   @default(100)
-  attack                Int                   @default(10)
-  defense               Int                   @default(5)
-  speed                 Int                   @default(5)
-  perception            Int                   @default(5)
-  isOnline              Boolean               @default(false)
-  lastSeen              DateTime              @default(now())
-  createdAt             DateTime              @default(now())
-  updatedAt             DateTime              @updatedAt
-  userId                String                @unique
+  id                    String               @id @default(cuid())
+  name                  String               @unique
+  level                 Int                  @default(1)
+  experience            Int                  @default(0)
+  gold                  Int                  @default(100)
+  reputation            Int                  @default(0)
+  currentHealth         Int                  @default(100)
+  maxHealth             Int                  @default(100)
+  attack                Int                  @default(10)
+  defense               Int                  @default(5)
+  speed                 Int                  @default(5)
+  perception            Int                  @default(5)
+  isOnline              Boolean              @default(false)
+  lastSeen              DateTime             @default(now())
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  userId                String               @unique
   partyId               String?
-  agility               Int                   @default(5)
-  blockStrength         Int                   @default(3)
-  criticalChance        Float                 @default(0.05)
-  pendingStatPoints     Int                   @default(0)
-  bountiesPlaced        Bounty[]              @relation("BountyPlacedBy")
-  bountiesTarget        Bounty[]              @relation("BountyTarget")
-  party                 Party?                @relation("PartyMembers", fields: [partyId], references: [id])
-  user                  User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  agility               Int                  @default(5)
+  blockStrength         Int                  @default(3)
+  criticalChance        Float                @default(0.05)
+  pendingStatPoints     Int                  @default(0)
+  bountiesPlaced        Bounty[]             @relation("BountyPlacedBy")
+  bountiesTarget        Bounty[]             @relation("BountyTarget")
+  party                 Party?               @relation("PartyMembers", fields: [partyId], references: [id])
+  user                  User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   statistics            CharacterStatistics?
-  dungeonActions        DungeonPlayerAction[]
   dungeonTurns          DungeonTurn[]
   inventory             Inventory[]
-  ledParties            Party[]               @relation("PartyLeader")
+  ledParties            Party[]              @relation("PartyLeader")
   partyMembers          PartyMember[]
-  reportsAgainst        Report[]              @relation("ReportReported")
-  reportsMade           Report[]              @relation("ReportReporter")
-  tradeRequestsSent     TradeRequest[]        @relation("TradeRequestFrom")
-  tradeRequestsReceived TradeRequest[]        @relation("TradeRequestTo")
-  transactions          Transaction[]         @relation("TransactionActor")
-  targetTransactions    Transaction[]         @relation("TransactionTarget")
+  reportsAgainst        Report[]             @relation("ReportReported")
+  reportsMade           Report[]             @relation("ReportReporter")
+  tradeRequestsSent     TradeRequest[]       @relation("TradeRequestFrom")
+  tradeRequestsReceived TradeRequest[]       @relation("TradeRequestTo")
+  transactions          Transaction[]        @relation("TransactionActor")
+  targetTransactions    Transaction[]        @relation("TransactionTarget")
   lootRolls             LootRoll[]
 
   // NPC relations
@@ -116,20 +115,17 @@ model Mission {
   experienceReward Int     @default(10)
   isActive         Boolean @default(true)
   baseDuration     Int     @default(600)
-  minEventInterval Int     @default(30)
-  maxEventInterval Int     @default(90)
   environmentType  String  @default("dungeon_corridor")
 
-  // NEW FIELDS
-  missionType             String  @default("TIMED") // TIMED, CLEAR, SURVIVAL
-  failCondition           String  @default("TIME_OR_DEATH") // TIME_OR_DEATH, DEATH_ONLY, BOSS_DEFEAT
-  bossTemplateId          String? // Boss to spawn (for CLEAR missions)
-  maxMonstersPerEncounter Int     @default(4) // Max enemies per combat event
+  // Multi-phase combat fields
+  totalPhases         Int      @default(3) // Number of combat phases
+  finalBossTemplateId String? // Monster template for final phase boss
+  monsterPoolIds      String[] // Array of monster template IDs for random waves
+  restDuration        Int      @default(60) // Time penalty for resting (seconds)
 
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
   dungeonSessions DungeonSession[]
-  allowedEvents   MissionEventTemplate[]
 }
 
 model Party {
@@ -180,6 +176,7 @@ model NPCCompanion {
 
   // Stats
   maxHealth      Int   @default(100)
+  currentHealth  Int   @default(100)
   attack         Int   @default(10)
   defense        Int   @default(5)
   speed          Int   @default(5)
@@ -233,34 +230,45 @@ model UnlockedNPC {
 }
 
 model DungeonSession {
-  id                 String             @id @default(cuid())
-  status             DungeonStatus      @default(WAITING)
-  duration           Int                @default(600)
-  missionStartTime   DateTime?
-  missionEndTime     DateTime?
-  pausedAt           DateTime?
-  totalPausedTime    Int                @default(0)
-  nextEventSpawnTime DateTime?
-  currentEventId     String?
-  seed               String?
-  createdAt          DateTime           @default(now())
-  updatedAt          DateTime           @updatedAt
-  missionId          String
-  partyId            String?
-  events             DungeonEvent[]
-  loot               DungeonLoot[]
-  mission            Mission            @relation(fields: [missionId], references: [id])
-  party              Party?             @relation(fields: [partyId], references: [id])
-  statistics         DungeonStatistics?
-  turns              DungeonTurn[]
+  id               String             @id @default(cuid())
+  status           DungeonStatus      @default(WAITING)
+  duration         Int                @default(600)
+  missionStartTime DateTime?
+  missionEndTime   DateTime?
+  pausedAt         DateTime?
+  totalPausedTime  Int                @default(0)
+  seed             String?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  missionId        String
+  partyId          String?
+  loot             DungeonLoot[]
+  mission          Mission            @relation(fields: [missionId], references: [id])
+  party            Party?             @relation(fields: [partyId], references: [id])
+  statistics       DungeonStatistics?
+  turns            DungeonTurn[]
+  phases           MissionPhase[]
 
-  // Legacy fields (to be removed later)
-  currentTurn   Int       @default(0)
-  maxTurns      Int       @default(10)
-  turnTimeLimit Int       @default(60)
-  turnEndsAt    DateTime?
-  startedAt     DateTime?
-  completedAt   DateTime?
+  // Multi-phase combat fields
+  currentPhaseNumber Int @default(1)
+}
+
+model MissionPhase {
+  id              String      @id @default(cuid())
+  sessionId       String
+  phaseNumber     Int // 1, 2, 3, etc.
+  status          PhaseStatus @default(PENDING) // PENDING, ACTIVE, RESTING, COMPLETED
+  monstersSpawned Json // Array of spawned monster data
+  startedAt       DateTime?
+  completedAt     DateTime?
+  restStartedAt   DateTime?
+  restEndedAt     DateTime?
+  createdAt       DateTime    @default(now())
+
+  session DungeonSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@unique([sessionId, phaseNumber])
+  @@index([sessionId])
 }
 
 model DungeonTurn {
@@ -470,71 +478,6 @@ model CharacterStatistics {
   character              Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
 }
 
-model EventTemplate {
-  id               String                 @id @default(cuid())
-  type             EventType
-  name             String
-  description      String
-  difficulty       Int
-  minigameType     MinigameType?
-  config           Json
-  outcomes         Json
-  createdAt        DateTime               @default(now())
-  dungeonEvents    DungeonEvent[]
-  missionTemplates MissionEventTemplate[]
-}
-
-model MissionEventTemplate {
-  id              String   @id @default(cuid())
-  missionId       String
-  eventTemplateId String
-  weight          Int      @default(1) // For weighted random selection
-  createdAt       DateTime @default(now())
-
-  mission       Mission       @relation(fields: [missionId], references: [id], onDelete: Cascade)
-  eventTemplate EventTemplate @relation(fields: [eventTemplateId], references: [id], onDelete: Cascade)
-
-  @@unique([missionId, eventTemplateId])
-  @@index([missionId])
-}
-
-model DungeonEvent {
-  id            String                @id @default(cuid())
-  sessionId     String
-  templateId    String?
-  eventNumber   Int
-  parentEventId String?
-  status        EventStatus           @default(PENDING)
-  eventData     Json
-  results       Json?
-  startsAt      DateTime?
-  completedAt   DateTime?
-  createdAt     DateTime              @default(now())
-  parentEvent   DungeonEvent?         @relation("EventBranches", fields: [parentEventId], references: [id])
-  childEvents   DungeonEvent[]        @relation("EventBranches")
-  session       DungeonSession        @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-  template      EventTemplate?        @relation(fields: [templateId], references: [id])
-  playerActions DungeonPlayerAction[]
-
-  @@index([sessionId, eventNumber])
-  @@index([parentEventId])
-}
-
-model DungeonPlayerAction {
-  id          String       @id @default(cuid())
-  eventId     String
-  characterId String
-  actionType  String
-  actionData  Json
-  result      Json?
-  submittedAt DateTime     @default(now())
-  character   Character    @relation(fields: [characterId], references: [id])
-  event       DungeonEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
-
-  @@unique([eventId, characterId])
-  @@index([characterId])
-}
-
 model MonsterTemplate {
   id          String             @id @default(cuid())
   name        String             @unique
@@ -664,35 +607,11 @@ enum ReportStatus {
   DISMISSED
 }
 
-enum EventType {
-  COMBAT
-  TREASURE
-  TRAP
-  PUZZLE
-  CHOICE
-  REST
-  BETRAYAL_OPPORTUNITY
-  NPC_ENCOUNTER
-  ENVIRONMENTAL_HAZARD
-}
-
-enum MinigameType {
-  JUMPING_GAPS
-  CLOSING_WALLS
-  LOCK_PICKING
-  RIDDLE
-  QUICK_TIME
-  NONE
-  COMBAT_CLICKER
-}
-
-enum EventStatus {
+enum PhaseStatus {
   PENDING
   ACTIVE
-  WAITING
-  RESOLVING
+  RESTING
   COMPLETED
-  SKIPPED
 }
 
 enum MonsterType {
