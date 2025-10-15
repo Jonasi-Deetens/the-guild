@@ -54,6 +54,7 @@ export class MissionScheduler {
             members: {
               include: {
                 character: true,
+                npcCompanion: true,
               },
             },
           },
@@ -343,45 +344,73 @@ export class MissionScheduler {
    */
   private static async checkAllPlayersDead(session: any): Promise<boolean> {
     if (session.party) {
-      const aliveMembers = session.party.members.filter(
-        (member: any) =>
-          member.character &&
-          member.character.currentHealth != null &&
-          member.character.currentHealth > 0
-      );
+      const aliveMembers = session.party.members.filter((member: any) => {
+        // Handle both player characters and NPCs
+        if (member.character) {
+          // Player character
+          return (
+            member.character.currentHealth != null &&
+            member.character.currentHealth > 0
+          );
+        } else if (member.npcCompanion) {
+          // NPC companion
+          return (
+            member.npcCompanion.currentHealth != null &&
+            member.npcCompanion.currentHealth > 0
+          );
+        }
+        return false;
+      });
+
       console.log(
         `🔍 [MissionScheduler] Party members check: total=${session.party.members.length}, alive=${aliveMembers.length}`
       );
+
       session.party.members.forEach((member: any) => {
         if (member.character) {
           console.log(
-            `  - ${member.character.name}: health=${member.character.currentHealth}/${member.character.maxHealth}`
+            `  - Player ${member.character.name}: health=${member.character.currentHealth}/${member.character.maxHealth}`
+          );
+        } else if (member.npcCompanion) {
+          console.log(
+            `  - NPC ${member.npcCompanion.name}: health=${member.npcCompanion.currentHealth}/${member.npcCompanion.maxHealth}`
           );
         }
       });
+
       return aliveMembers.length === 0;
     } else {
-      // Solo mission - check if the character is dead
-      // Find the character by looking at recent player actions
-      const recentAction = await db.dungeonPlayerAction.findFirst({
+      // Solo mission - find the character from the session
+      // For solo missions, we need to find the character through the party leader relationship
+      const character = await db.character.findFirst({
         where: {
-          event: { sessionId: session.id },
+          ledParties: {
+            some: {
+              dungeonSessions: {
+                some: {
+                  id: session.id,
+                },
+              },
+            },
+          },
         },
-        include: { character: true },
-        orderBy: { submittedAt: "desc" },
       });
 
-      if (recentAction?.character) {
-        const isDead = recentAction.character.currentHealth <= 0;
+      if (character) {
+        const isDead = character.currentHealth <= 0;
         console.log(`🔍 Solo mission death check:`, {
           sessionId: session.id,
-          characterId: recentAction.character.id,
-          currentHealth: recentAction.character.currentHealth,
+          characterId: character.id,
+          currentHealth: character.currentHealth,
           isDead: isDead,
         });
         return isDead;
       }
 
+      // If no character found, assume alive
+      console.log(
+        `🔍 No character found for solo mission ${session.id}, assuming alive`
+      );
       return false;
     }
   }

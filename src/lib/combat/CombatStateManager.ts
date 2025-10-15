@@ -516,6 +516,7 @@ export class CombatStateManager {
     if (!monster) return;
 
     const now = Date.now();
+    // Use the monster's actual next attack time
     const attackTime = monster.nextAttackTime;
 
     this.blockStates[monsterId] = {
@@ -525,6 +526,41 @@ export class CombatStateManager {
       attackTime,
       isHolding: false,
     };
+  }
+
+  /**
+   * Handle block button click (start holding)
+   */
+  handleBlockClick(monsterId: string): void {
+    const blockState = this.blockStates[monsterId];
+    if (!blockState || !blockState.isVisible) return;
+
+    this.blockStates[monsterId] = {
+      ...blockState,
+      isHolding: true,
+      blockStartTime: Date.now(),
+    };
+  }
+
+  /**
+   * Handle block button release
+   */
+  handleBlockRelease(monsterId: string): void {
+    const blockState = this.blockStates[monsterId];
+    if (!blockState) return;
+
+    this.blockStates[monsterId] = {
+      ...blockState,
+      isHolding: false,
+      blockEndTime: Date.now(),
+    };
+  }
+
+  /**
+   * Clear block state for a monster (called after attack)
+   */
+  clearBlockState(monsterId: string): void {
+    delete this.blockStates[monsterId];
   }
 
   /**

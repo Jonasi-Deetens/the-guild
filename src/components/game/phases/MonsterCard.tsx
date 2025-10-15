@@ -13,14 +13,22 @@ interface MonsterCardProps {
   };
   currentTime: number;
   onClick?: (monsterId: string, event: React.MouseEvent) => void;
+  onRightClick?: (monsterId: string, event: React.MouseEvent) => void;
   isClickable?: boolean;
+  blockState?: {
+    isVisible: boolean;
+    startTime?: number;
+    duration?: number;
+  };
 }
 
 export const MonsterCard: React.FC<MonsterCardProps> = ({
   monster,
   currentTime,
   onClick,
+  onRightClick,
   isClickable = true,
+  blockState,
 }) => {
   const healthPercentage = (monster.health / monster.maxHealth) * 100;
 
@@ -41,6 +49,50 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
   const timeUntilAttack = monster.nextAttackTime
     ? Math.max(0, Math.ceil((monster.nextAttackTime - currentTime) / 1000))
     : 0;
+
+  // Calculate timing windows for block/parry indicators
+  const timeUntilAttackMs = monster.nextAttackTime
+    ? monster.nextAttackTime - currentTime
+    : 0;
+
+  // Determine block/parry windows based on monster rarity
+  let parryWindow = 300; // Base parry window (300ms)
+  let blockWindow = 1000; // Base block window (1000ms)
+
+  // Adjust windows based on monster rarity
+  switch (monster.rarity) {
+    case "BOSS":
+      parryWindow = 200; // Harder to parry
+      blockWindow = 800;
+      break;
+    case "RARE":
+      parryWindow = 250;
+      blockWindow = 900;
+      break;
+    case "ELITE":
+      parryWindow = 300;
+      blockWindow = 1000;
+      break;
+    case "COMMON":
+    default:
+      parryWindow = 400; // Easier to parry
+      blockWindow = 1200;
+      break;
+  }
+
+  // Determine timer color based on timing windows
+  let timerColor = "bg-red-500"; // Default red
+  let timerGlow = "";
+
+  if (timeUntilAttackMs <= parryWindow && timeUntilAttackMs > 0) {
+    // Parry window - yellow with glow
+    timerColor = "bg-yellow-500";
+    timerGlow = "shadow-yellow-500/50 shadow-lg";
+  } else if (timeUntilAttackMs <= blockWindow && timeUntilAttackMs > 0) {
+    // Block window - green with glow
+    timerColor = "bg-green-500";
+    timerGlow = "shadow-green-500/50 shadow-lg";
+  }
 
   const getRarityIcon = (rarity: string) => {
     switch (rarity) {
@@ -65,6 +117,15 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
       onClick={
         isClickable && monster.health > 0
           ? (e) => onClick?.(monster.id, e)
+          : undefined
+      }
+      onContextMenu={
+        isClickable && monster.health > 0
+          ? (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onRightClick?.(monster.id, e);
+            }
           : undefined
       }
     >
@@ -117,11 +178,30 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
         <div className="space-y-1">
           <div className="w-full bg-gray-600 rounded-full h-1">
             <div
-              className="bg-red-500 h-1 rounded-full transition-all duration-75"
+              className={`${timerColor} h-1 rounded-full transition-all duration-75 ${timerGlow}`}
               style={{ width: `${attackProgress}%` }}
             />
           </div>
-          <p className="text-xs text-red-400 text-center">{timeUntilAttack}s</p>
+          <p
+            className={`text-xs text-center ${
+              timeUntilAttackMs <= parryWindow && timeUntilAttackMs > 0
+                ? "text-yellow-400 font-bold"
+                : timeUntilAttackMs <= blockWindow && timeUntilAttackMs > 0
+                ? "text-green-400 font-bold"
+                : "text-red-400"
+            }`}
+          >
+            {timeUntilAttack}s
+          </p>
+        </div>
+      )}
+
+      {/* Block Indicator */}
+      {monster.health > 0 && blockState?.isHolding && (
+        <div className="absolute bottom-2 left-2 right-2">
+          <div className="bg-green-500 text-white text-xs px-2 py-1 rounded text-center font-bold animate-pulse">
+            🛡️ BLOCKING
+          </div>
         </div>
       )}
     </div>

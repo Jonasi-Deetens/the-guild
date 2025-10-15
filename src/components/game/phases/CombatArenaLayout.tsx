@@ -402,6 +402,82 @@ export function CombatArenaLayout({
     }, 500);
   };
 
+  const handleMonsterRightClick = (
+    monsterId: string,
+    event: React.MouseEvent
+  ) => {
+    event.stopPropagation();
+    event.preventDefault();
+
+    if (!gameState.gameActive || gameState.gameOver || !combatManager.current) {
+      return;
+    }
+
+    const monster = gameState.monsters.find((m) => m.id === monsterId);
+    if (!monster || monster.health <= 0) return;
+
+    // Check if we're in the block/parry window
+    const now = Date.now();
+    const timeUntilAttack = monster.nextAttackTime - now;
+
+    // Only allow blocking if attack is coming soon (within 2 seconds)
+    if (timeUntilAttack <= 0 || timeUntilAttack > 2000) {
+      return; // Too early or too late to block
+    }
+
+    // Determine block/parry windows based on monster rarity
+    let parryWindow = 300; // Base parry window (300ms)
+    let blockWindow = 1000; // Base block window (1000ms)
+
+    // Adjust windows based on monster rarity
+    switch (monster.rarity) {
+      case "BOSS":
+        parryWindow = 200; // Harder to parry
+        blockWindow = 800;
+        break;
+      case "RARE":
+        parryWindow = 250;
+        blockWindow = 900;
+        break;
+      case "ELITE":
+        parryWindow = 300;
+        blockWindow = 1000;
+        break;
+      case "COMMON":
+      default:
+        parryWindow = 400; // Easier to parry
+        blockWindow = 1200;
+        break;
+    }
+
+    let blockStatus: "none" | "block" | "parry" = "none";
+
+    if (timeUntilAttack <= parryWindow && timeUntilAttack > 0) {
+      blockStatus = "parry";
+    } else if (timeUntilAttack <= blockWindow && timeUntilAttack > 0) {
+      blockStatus = "block";
+    }
+
+    // Store the block status for when the attack happens
+    if (blockStatus !== "none") {
+      // Only set block state for this specific monster, don't interfere with attack timers
+      setGameState((prev) => ({
+        ...prev,
+        blockStates: {
+          ...prev.blockStates,
+          [monsterId]: {
+            monsterId,
+            isVisible: true,
+            warningStartTime: now,
+            attackTime: monster.nextAttackTime,
+            isHolding: false,
+            blockStatus: blockStatus,
+          },
+        },
+      }));
+    }
+  };
+
   // NPC Attack System
   const performNPCAttack = (npc: CombatPartyMember) => {
     if (!combatManager.current) return;
@@ -498,8 +574,19 @@ export function CombatArenaLayout({
     // Store target health before attack for damage calculation
     const targetHealthBefore = target.currentHealth;
 
-    // Process the monster attack
-    combatManager.current.processMonsterAttack(monster.id, target.id);
+    // Check for stored block status
+    const blockState = gameState.blockStates[monster.id];
+    const blockStatus = blockState?.blockStatus || "none";
+
+    // Process the monster attack with block status
+    combatManager.current.processMonsterAttack(
+      monster.id,
+      target.id,
+      blockStatus
+    );
+
+    // Clear block state after attack
+    combatManager.current.clearBlockState(monster.id);
 
     // Calculate damage dealt
     const damageDealt = targetHealthBefore - target.currentHealth;
@@ -724,7 +811,9 @@ export function CombatArenaLayout({
                     monster={monster}
                     currentTime={currentTime}
                     onClick={handleMonsterClick}
+                    onRightClick={handleMonsterRightClick}
                     isClickable={monster.health > 0}
+                    blockState={gameState.blockStates[monster.id]}
                   />
                 ))}
               </div>
