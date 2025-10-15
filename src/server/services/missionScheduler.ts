@@ -98,12 +98,20 @@ export class MissionScheduler {
 
     // Check if mission time has expired
     if (session.missionEndTime && now >= session.missionEndTime) {
+      console.log(
+        `⏰ Mission ${
+          session.id
+        } timed out at ${now.toISOString()}, end time was ${session.missionEndTime.toISOString()}`
+      );
       await this.handleMissionTimeout(session);
       return;
     }
 
     // Check if all players are dead
     if (await this.checkAllPlayersDead(session)) {
+      console.log(
+        `💀 Mission ${session.id} failed: All party members are dead`
+      );
       await this.handleMissionFailure(session, "All party members are dead");
       return;
     }
@@ -341,6 +349,16 @@ export class MissionScheduler {
           member.character.currentHealth != null &&
           member.character.currentHealth > 0
       );
+      console.log(
+        `🔍 [MissionScheduler] Party members check: total=${session.party.members.length}, alive=${aliveMembers.length}`
+      );
+      session.party.members.forEach((member: any) => {
+        if (member.character) {
+          console.log(
+            `  - ${member.character.name}: health=${member.character.currentHealth}/${member.character.maxHealth}`
+          );
+        }
+      });
       return aliveMembers.length === 0;
     } else {
       // Solo mission - check if the character is dead

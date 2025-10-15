@@ -144,16 +144,7 @@ export const statisticsRouter = createTRPCRouter({
     const dungeonStats = await ctx.db.dungeonStatistics.findMany({
       where: {
         session: {
-          OR: [
-            { party: { members: { some: { characterId: character.id } } } },
-            {
-              events: {
-                some: {
-                  playerActions: { some: { characterId: character.id } },
-                },
-              },
-            },
-          ],
+          party: { members: { some: { characterId: character.id } } },
         },
       },
     });

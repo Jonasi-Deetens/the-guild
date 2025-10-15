@@ -70,13 +70,13 @@ export default function DungeonPage() {
   }
 
   return (
-    <div className="flex h-screen relative">
+    <div className="flex h-screen relative overflow-x-hidden">
       <EnvironmentBackground
         environmentType={session.mission.environmentType}
       />
 
       {/* Main content with relative z-index */}
-      <div className="relative z-10 flex w-full h-full">
+      <div className="relative z-10 flex w-full h-full overflow-x-hidden">
         {/* Party Members Sidebar */}
         <PartyMembersSidebar
           partyMembers={partyMembers}
@@ -85,7 +85,7 @@ export default function DungeonPage() {
         />
 
         {/* Main Game Area */}
-        <div className="flex-1 flex flex-col overflow-hidden w-full">
+        <div className="flex-1 flex flex-col overflow-hidden overflow-x-hidden">
           {/* Header */}
           <div className="p-4 border-b border-amber-900/30 bg-stone-900/50">
             <div className="text-center">

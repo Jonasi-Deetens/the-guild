@@ -38,7 +38,7 @@ export function EnvironmentBackground({
       case "cave":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-t from-amber-900/10 via-transparent to-transparent" />
+            <div className="absolute h-full w-full bg-gradient-to-t from-amber-900/10 via-transparent to-transparent" />
             {/* Cave torch spots */}
             <div className="absolute top-1/4 left-1/4 w-40 h-40 bg-amber-600/15 rounded-full blur-3xl animate-torch-flicker" />
             <div
@@ -50,7 +50,7 @@ export function EnvironmentBackground({
       case "training_ground":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-b from-yellow-300/5 via-transparent to-green-900/20" />
+            <div className="absolute h-full w-full bg-gradient-to-b from-yellow-300/5 via-transparent to-green-900/20" />
             {/* Sunlight rays */}
             <div className="absolute top-0 left-1/4 w-2 h-full bg-gradient-to-b from-yellow-200/20 to-transparent blur-sm" />
             <div className="absolute top-0 right-1/3 w-1 h-full bg-gradient-to-b from-yellow-200/15 to-transparent blur-sm" />
@@ -60,7 +60,7 @@ export function EnvironmentBackground({
       case "inn":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-b from-amber-900/5 via-transparent to-orange-900/10" />
+            <div className="absolute h-full w-full bg-gradient-to-b from-amber-900/5 via-transparent to-orange-900/10" />
             {/* Warm candlelight */}
             <div className="absolute top-1/4 left-1/4 w-40 h-40 bg-orange-400/15 rounded-full blur-3xl animate-torch-flicker" />
             <div
@@ -78,7 +78,7 @@ export function EnvironmentBackground({
       case "missions":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-b from-blue-900/5 via-transparent to-purple-900/10" />
+            <div className="absolute h-full w-full bg-gradient-to-b from-blue-900/5 via-transparent to-purple-900/10" />
             {/* Mission board lighting */}
             <div className="absolute top-1/4 left-1/3 w-48 h-48 bg-blue-400/10 rounded-full blur-3xl animate-torch-flicker" />
             <div
@@ -94,7 +94,7 @@ export function EnvironmentBackground({
       case "forest":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-b from-green-700/10 via-transparent to-black/30" />
+            <div className="absolute h-full w-full bg-gradient-to-b from-green-700/10 via-transparent to-black/30" />
             {/* Light rays through canopy */}
             <div className="absolute top-0 left-1/4 w-1 h-full bg-gradient-to-b from-yellow-200/10 to-transparent blur-sm" />
             <div className="absolute top-0 right-1/3 w-1 h-full bg-gradient-to-b from-yellow-200/10 to-transparent blur-sm" />
@@ -104,7 +104,7 @@ export function EnvironmentBackground({
       case "crypt":
         return (
           <>
-            <div className="absolute inset-0 bg-purple-900/20" />
+            <div className="absolute h-full w-full bg-purple-900/20" />
             <div className="absolute bottom-0 inset-x-0 h-1/3 bg-gradient-to-t from-purple-500/10 to-transparent" />
             {/* Mystical glow spots */}
             <div className="absolute top-1/3 left-1/3 w-48 h-48 bg-purple-400/10 rounded-full blur-3xl animate-float-slow" />
@@ -117,7 +117,7 @@ export function EnvironmentBackground({
       case "ruins":
         return (
           <>
-            <div className="absolute inset-0 bg-gradient-to-b from-slate-800/20 via-transparent to-gray-900/30" />
+            <div className="absolute h-full w-full bg-gradient-to-b from-slate-800/20 via-transparent to-gray-900/30" />
             {/* Moonlight through cracks */}
             <div className="absolute top-0 left-1/3 w-1 h-full bg-blue-200/8 to-transparent blur-sm" />
             <div className="absolute top-0 right-1/4 w-0.5 h-full bg-blue-200/6 to-transparent blur-sm" />
@@ -148,16 +148,16 @@ export function EnvironmentBackground({
   }, [imagePath]);
 
   return (
-    <div className="absolute inset-0 overflow-hidden">
+    <div className="absolute h-full w-full overflow-hidden">
       {/* Fallback gradient for missing images - only show if image fails to load */}
       <div
-        className="absolute inset-0 bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900"
+        className="absolute h-full w-full bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900"
         style={{ zIndex: 1 }}
       />
 
       {/* Base image background */}
       <div
-        className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+        className="absolute h-full w-full bg-cover bg-center bg-no-repeat"
         style={{
           backgroundImage: `url(${imagePath})`,
           zIndex: 2,

@@ -20,7 +20,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className="dark">
-      <body className={inter.className}>
+      <body className={`${inter.className} overflow-x-hidden`}>
         <TRPCReactProvider>
           <AuthProvider>
             <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">

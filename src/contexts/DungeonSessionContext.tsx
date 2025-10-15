@@ -153,7 +153,7 @@ export function DungeonSessionProvider({
     { sessionId },
     {
       enabled: !!sessionId,
-      refetchInterval: 5000, // Poll every 5 seconds
+      refetchInterval: 1000, // Poll every 1 second for responsive updates
     }
   );
 
@@ -166,7 +166,7 @@ export function DungeonSessionProvider({
     { sessionId },
     {
       enabled: !!sessionId,
-      refetchInterval: 2000, // Poll every 2 seconds for phase updates
+      refetchInterval: 500, // Poll every 500ms for responsive combat updates
     }
   );
 
@@ -176,7 +176,7 @@ export function DungeonSessionProvider({
     refetch: refetchCharacter,
     isLoading: characterLoading,
   } = api.character.getCurrentCharacter.useQuery(undefined, {
-    refetchInterval: 5000, // Poll every 5 seconds to get updated stats
+    refetchInterval: 2000, // Poll every 2 seconds to get updated stats
   });
 
   // Start mission mutation
@@ -244,17 +244,7 @@ export function DungeonSessionProvider({
     }
   }, [session?.status]);
 
-  // Single polling interval for active missions
-  useEffect(() => {
-    if (session?.status === "ACTIVE" || session?.status === "WAITING") {
-      const interval = setInterval(() => {
-        refetchSession();
-        refetchCharacter();
-      }, 2000);
-
-      return () => clearInterval(interval);
-    }
-  }, [session?.status, refetchSession, refetchCharacter]);
+  // Note: Polling is handled by tRPC refetchInterval settings above
 
   const partyMembers = useMemo(() => {
     // For party missions, return party members
@@ -289,7 +279,7 @@ export function DungeonSessionProvider({
               isDead: isDead,
               isNPC: true,
               attackInterval: attackInterval,
-              nextAttackTime: Date.now() + attackInterval * 1000 * 0.5, // Start attacking after half their attack interval
+              nextAttackTime: Date.now() + attackInterval * 1000, // Start attacking after full attack interval
             };
           }
 

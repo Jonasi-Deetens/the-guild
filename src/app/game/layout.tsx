@@ -142,7 +142,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900">
+    <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900 overflow-x-hidden">
       {/* Sidebar */}
       <div
         className={`fixed inset-y-0 left-0 z-50 w-64 bg-stone-900/95 backdrop-blur-sm border-r border-amber-900/30 shadow-2xl transform transition-transform duration-300 ${
@@ -355,7 +355,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
       )}
 
       {/* Main content */}
-      <div className="lg:ml-64 flex flex-col h-screen w-full">
+      <div className="lg:ml-64 flex flex-col h-screen lg:w-[calc(100%-16rem)] w-full overflow-x-hidden">
         {/* Top bar */}
         <div className="bg-stone-900/50 backdrop-blur-sm border-b border-amber-900/30 p-4 flex-shrink-0">
           <div className="flex items-center justify-between">

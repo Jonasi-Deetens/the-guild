@@ -8,6 +8,8 @@ import {
   Star,
   MessageCircle,
   Send,
+  ChevronLeft,
+  ChevronRight,
 } from "@/components/icons";
 
 interface PartyMember {
@@ -27,9 +29,19 @@ interface ChatMessage {
   timestamp: string;
 }
 
+interface CombatLogEvent {
+  timestamp: number;
+  type: string;
+  source: string;
+  target: string;
+  amount: number;
+  isCritical?: boolean;
+}
+
 interface PartyMembersSidebarProps {
   partyMembers: PartyMember[];
   partyChat?: ChatMessage[];
+  combatLog?: CombatLogEvent[];
   onSendMessage?: (message: string) => void;
   className?: string;
 }
@@ -37,10 +49,12 @@ interface PartyMembersSidebarProps {
 export function PartyMembersSidebar({
   partyMembers,
   partyChat = [],
+  combatLog = [],
   onSendMessage,
   className = "",
 }: PartyMembersSidebarProps) {
   const [chatMessage, setChatMessage] = useState("");
+  const [isOpen, setIsOpen] = useState(true);
 
   const handleSendMessage = () => {
     if (chatMessage.trim() && onSendMessage) {
@@ -67,7 +81,7 @@ export function PartyMembersSidebar({
 
   return (
     <div
-      className={`w-64 bg-stone-900/95 backdrop-blur-sm border-r border-amber-900/30 h-full flex flex-col ${className}`}
+      className={`w-64 bg-stone-900/95 backdrop-blur-sm border-r border-amber-900/30 h-full flex flex-col z-10 ${className}`}
     >
       {/* Party Members Section */}
       <div className="flex-1 overflow-y-auto p-4">
