@@ -210,4 +210,49 @@ export class LootService {
       claimedAt: loot.claimedAt,
     }));
   }
+
+  /**
+   * Generate mission completion loot
+   */
+  static async generateMissionLoot(sessionId: string): Promise<void> {
+    console.log(
+      `🎁 Generating mission completion loot for session ${sessionId}`
+    );
+
+    const session = await db.dungeonSession.findUnique({
+      where: { id: sessionId },
+      include: { mission: true },
+    });
+
+    if (!session) {
+      console.log(`⚠️ Session ${sessionId} not found`);
+      return;
+    }
+
+    // Generate base mission completion loot (gold coins)
+    const baseGoldReward = session.mission.baseReward || 100;
+    const goldItem = await db.item.findFirst({
+      where: { name: "Gold Coin" },
+    });
+
+    if (goldItem) {
+      await db.dungeonLoot.create({
+        data: {
+          sessionId,
+          itemId: goldItem.id,
+          quantity: baseGoldReward,
+          rarity: "COMMON",
+          value: baseGoldReward,
+        },
+      });
+      console.log(
+        `💰 Generated ${baseGoldReward} gold coins for mission completion`
+      );
+    }
+
+    // TODO: Add other mission completion loot (items, etc.) based on mission difficulty
+    console.log(
+      `✅ Mission completion loot generated for session ${sessionId}`
+    );
+  }
 }

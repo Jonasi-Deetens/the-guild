@@ -28,6 +28,8 @@ export default function DungeonPage() {
     startMission,
     submitAction,
     sendChatMessage,
+    refetchSession,
+    refetchCharacter,
   } = useDungeonSession();
 
   // Get session loot for completion modal
@@ -38,13 +40,41 @@ export default function DungeonPage() {
 
   // Phase mutations
   const endRestMutation = api.phase.endRest.useMutation();
+  const completePhase = api.phase.completePhase.useMutation();
+  const startRest = api.phase.startRest.useMutation();
+  const completeMission = api.phase.completeMission.useMutation();
   const getPartyHealthStatus = api.phase.getPartyHealthStatus.useQuery(
     { sessionId: session?.id || "" },
     { enabled: !!session?.id && phaseStatus === "RESTING" }
   );
 
-  const handleMinigameComplete = (result: unknown) => {
-    submitAction("minigame_complete", result);
+  const handleMinigameComplete = async (result: unknown) => {
+    if (!session || !currentPhase) return;
+
+    try {
+      // Handle final phase completion
+      if (currentPhase.phaseNumber === session.mission.totalPhases) {
+        // Final phase completed - complete mission directly without rest period
+        console.log("🎉 Final phase completed! Mission finished directly.");
+        await completeMission.mutateAsync({
+          sessionId: session.id,
+          phaseNumber: currentPhase.phaseNumber,
+        });
+      } else {
+        // Mark phase as completed and start rest period for non-final phases
+        await completePhase.mutateAsync({
+          sessionId: session.id,
+          phaseNumber: currentPhase.phaseNumber,
+        });
+
+        await startRest.mutateAsync({
+          sessionId: session.id,
+          phaseNumber: currentPhase.phaseNumber,
+        });
+      }
+    } catch (error) {
+      console.error("Failed to complete phase:", error);
+    }
   };
 
   const handleRestContinue = async (didRest: boolean) => {
@@ -56,6 +86,19 @@ export default function DungeonPage() {
         phaseNumber: currentPhase.phaseNumber,
         didRest,
       });
+
+      // If healing was applied, clear localStorage combat state to prevent old health from overriding healed health
+      if (didRest) {
+        console.log(
+          "🧹 [DungeonPage] Clearing localStorage combat state after rest healing"
+        );
+        localStorage.removeItem(`combat-state-${currentPhase.phaseNumber}`);
+        localStorage.removeItem(`combat-state-${currentPhase.phaseNumber + 1}`);
+      }
+
+      // Refetch session data to get updated missionEndTime and character data to get updated health
+      await refetchSession();
+      await refetchCharacter();
     } catch (error) {
       console.error("Failed to end rest period:", error);
     }
@@ -192,6 +235,11 @@ export default function DungeonPage() {
                   remainingTime={remainingTime}
                   sessionId={session.id}
                   onPhaseComplete={handleMinigameComplete}
+                  onHealthUpdate={() => {
+                    // Refetch character and session data to sync party UI
+                    refetchCharacter();
+                    refetchSession();
+                  }}
                 />
               )}
 

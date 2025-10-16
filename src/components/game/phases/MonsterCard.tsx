@@ -107,6 +107,25 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
     }
   };
 
+  const getMonsterImage = (monsterName: string) => {
+    // Map monster names to their image files
+    const imageMap: Record<string, string> = {
+      "Training Dummy": "/assets/training_dummy.png",
+      "Advanced Training Dummy": "/assets/advanced_training_dummy.png",
+      "Master Training Dummy": "/assets/master_training_dummy.png",
+      "Blue Slime": "/assets/training_dummy.png", // Fallback until we have slime images
+      "Red Slime": "/assets/training_dummy.png",
+      "Green Slime": "/assets/training_dummy.png",
+      "Slime King": "/assets/training_dummy.png",
+      "Bandit Thug": "/assets/training_dummy.png", // Fallback until we have bandit images
+      "Bandit Archer": "/assets/training_dummy.png",
+      "Bandit Rogue": "/assets/training_dummy.png",
+      "Bandit Leader": "/assets/training_dummy.png",
+    };
+
+    return imageMap[monsterName] || "/assets/training_dummy.png";
+  };
+
   return (
     <div
       className={`relative p-3 min-w-[120px] ${
@@ -155,7 +174,7 @@ export const MonsterCard: React.FC<MonsterCardProps> = ({
       {/* Monster Image */}
       <div className="relative w-16 h-16 mx-auto mb-2">
         <img
-          src="/assets/training_dummy.png"
+          src={getMonsterImage(monster.name)}
           alt={monster.name}
           className="w-full h-full object-cover rounded-lg"
         />

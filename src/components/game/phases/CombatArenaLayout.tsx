@@ -50,7 +50,8 @@ interface CombatArenaLayoutProps {
   environmentType: string;
   remainingTime: number;
   sessionId: string;
-  onPhaseComplete?: (result: any) => void;
+  onPhaseComplete?: (result: unknown) => void;
+  onHealthUpdate?: () => void; // Callback to trigger data refetch
 }
 
 export function CombatArenaLayout({
@@ -63,6 +64,7 @@ export function CombatArenaLayout({
   remainingTime,
   sessionId,
   onPhaseComplete,
+  onHealthUpdate,
 }: CombatArenaLayoutProps) {
   // Combat state management
   const combatManager = useRef<CombatStateManager | null>(null);
@@ -94,9 +96,17 @@ export function CombatArenaLayout({
 
   // State for smooth timer updates
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const [clickedMonsters, setClickedMonsters] = useState<Record<string, any>>(
-    {}
-  );
+  const [clickedMonsters, setClickedMonsters] = useState<
+    Record<
+      string,
+      {
+        isPulsing: boolean;
+        damage: number;
+        isCritical: boolean;
+        clickTime: number;
+      }
+    >
+  >({});
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // tRPC mutations for server-side persistence
@@ -115,6 +125,10 @@ export function CombatArenaLayout({
   const aliveMonsters = gameState.monsters.filter((m) => m.health > 0);
   const alivePartyMembers = gameState.party.filter((m) => !m.isDead);
 
+  // Boss phase detection
+  const isBossPhase = phaseNumber === totalPhases;
+  const hasBossMonster = isBossPhase && aliveMonsters.length === 1;
+
   // Initialize combat manager
   useEffect(() => {
     if (!combatManager.current) {
@@ -122,10 +136,26 @@ export function CombatArenaLayout({
     }
   }, []);
 
-  // Load saved combat state on mount
+  // Load saved combat state on mount, but only if we don't have fresh database data
   useEffect(() => {
-    loadCombatState();
-  }, [phaseNumber]);
+    const dbMonsters = monsters.map((m) => ({
+      id: m.id,
+      name: m.name,
+      health: m.health,
+      maxHealth: m.maxHealth,
+    }));
+
+    // Only load from localStorage if we have monsters from database and haven't already loaded
+    if (monsters.length > 0 && !gameState.gameActive) {
+      // Check if localStorage was cleared (indicating fresh start after rest healing)
+      const savedState = localStorage.getItem(`combat-state-${phaseNumber}`);
+      if (savedState) {
+        loadCombatState();
+      } else {
+        initializeCombat();
+      }
+    }
+  }, [phaseNumber, monsters.length, gameState.gameActive]);
 
   // Save combat state whenever it changes
   useEffect(() => {
@@ -145,16 +175,28 @@ export function CombatArenaLayout({
     // Initialize combat if we have monsters and party members, and either:
     // 1. Game is not active yet, OR
     // 2. Game is active but we don't have monsters in combat state yet
+    // BUT only if we haven't loaded from localStorage (which would have set gameActive)
     if (
       monsters.length > 0 &&
       partyMembers.length > 0 &&
       (!gameState.gameActive || gameState.monsters.length === 0) &&
       !gameState.isInitializing
     ) {
-      setGameState((prev) => ({ ...prev, isInitializing: true }));
-      initializeCombat();
+      // Check if we have saved state in localStorage
+      const savedState = localStorage.getItem(`combat-state-${phaseNumber}`);
+      if (!savedState) {
+        // Only initialize if we don't have saved state
+        setGameState((prev) => ({ ...prev, isInitializing: true }));
+        initializeCombat();
+      }
     }
-  }, [monsters, partyMembers, gameState.gameActive, gameState.monsters.length]);
+  }, [
+    monsters,
+    partyMembers,
+    gameState.gameActive,
+    gameState.monsters.length,
+    phaseNumber,
+  ]);
 
   // NPC and Monster attack system
   useEffect(() => {
@@ -186,9 +228,6 @@ export function CombatArenaLayout({
             ? nextAttackTime - currentTime
             : 0;
           if (nextAttackTime && currentTime >= nextAttackTime) {
-            console.log(
-              `⚔️ [CombatArenaLayout] NPC ${member.name} attacking (${member.attackInterval}s interval) - timeUntilAttack was ${timeUntilAttack}ms`
-            );
             performNPCAttack(member);
           }
         }
@@ -203,9 +242,6 @@ export function CombatArenaLayout({
             ? nextAttackTime - currentTime
             : 0;
           if (nextAttackTime && currentTime >= nextAttackTime) {
-            console.log(
-              `⚔️ [CombatArenaLayout] Monster ${monster.name} attacking (${monster.attackInterval}s interval) - timeUntilAttack was ${timeUntilAttack}ms`
-            );
             performMonsterAttack(monster);
           }
         }
@@ -345,17 +381,17 @@ export function CombatArenaLayout({
     const targetMonster = gameState.monsters.find((m) => m.id === monsterId);
     if (!targetMonster) return;
 
-    // Store monster health before attack for damage calculation
-    const monsterHealthBefore = targetMonster.health;
-
-    // Process attack
+    // Process attack and get damage dealt directly from result
     const result = combatManager.current.processPartyAttack(
       currentPlayer.id,
       monsterId
     );
 
-    // Calculate damage dealt
-    const damageDealt = monsterHealthBefore - targetMonster.health;
+    // Use the damage from the combat manager result
+    const damageDealt = result.damage;
+
+    // Get updated state from combat manager
+    const newState = combatManager.current.getState();
 
     // Trigger click animation with damage number
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
@@ -369,8 +405,7 @@ export function CombatArenaLayout({
       },
     }));
 
-    // Update state from combat manager while preserving attack times
-    const newState = combatManager.current.getState();
+    // Update state while preserving attack times (newState already obtained above)
     setGameState((prev) => ({
       ...prev,
       monsters: newState.monsters.map((monster) => ({
@@ -389,9 +424,12 @@ export function CombatArenaLayout({
       damageLog: newState.damageLog,
     }));
 
-    // Persist monster health to database
+    // Get the updated monster from the combat manager state
+    const updatedMonster = newState.monsters.find((m) => m.id === monsterId);
+    const updatedHealth = updatedMonster?.health || targetMonster.health;
+
     if (damageDealt > 0) {
-      persistMonsterHealth(targetMonster.id, targetMonster.health);
+      persistMonsterHealth(targetMonster.id, updatedHealth);
     }
 
     // Clear animation after a short delay
@@ -410,22 +448,12 @@ export function CombatArenaLayout({
     event.stopPropagation();
     event.preventDefault();
 
-    console.log(
-      `🖱️ [CombatArenaLayout] Right-click detected on monster ${monsterId}`
-    );
-
     if (!gameState.gameActive || gameState.gameOver || !combatManager.current) {
-      console.log(
-        `❌ [CombatArenaLayout] Right-click blocked: game not active or combat manager not ready`
-      );
       return;
     }
 
     const monster = gameState.monsters.find((m) => m.id === monsterId);
     if (!monster || monster.health <= 0) {
-      console.log(
-        `❌ [CombatArenaLayout] Right-click blocked: monster not found or dead`
-      );
       return;
     }
 
@@ -433,22 +461,8 @@ export function CombatArenaLayout({
     const now = Date.now();
     const timeUntilAttack = monster.nextAttackTime - now;
 
-    console.log(
-      `⏰ [CombatArenaLayout] Monster ${monster.name} timing: ${timeUntilAttack}ms until attack, rarity: ${monster.rarity}`
-    );
-    console.log(
-      `⏰ [CombatArenaLayout] Monster nextAttackTime: ${new Date(
-        monster.nextAttackTime
-      ).toLocaleTimeString()}, current time: ${new Date(
-        now
-      ).toLocaleTimeString()}`
-    );
-
     // Only allow blocking if attack is coming soon (within 2 seconds)
     if (timeUntilAttack <= 0 || timeUntilAttack > 2000) {
-      console.log(
-        `❌ [CombatArenaLayout] Right-click failed for ${monster.name}: ${timeUntilAttack}ms until attack (outside window)`
-      );
       return; // Too early or too late to block
     }
 
@@ -487,10 +501,6 @@ export function CombatArenaLayout({
 
     // Store the block status for when the attack happens
     if (blockStatus !== "none") {
-      console.log(
-        `🛡️ [CombatArenaLayout] Right-click block/parry set for ${monster.name}: ${blockStatus} (${timeUntilAttack}ms until attack)`
-      );
-
       const blockState = {
         monsterId,
         isVisible: true,
@@ -512,9 +522,6 @@ export function CombatArenaLayout({
         },
       }));
     } else {
-      console.log(
-        `❌ [CombatArenaLayout] Right-click failed for ${monster.name}: ${timeUntilAttack}ms until attack (outside window)`
-      );
     }
   };
 
@@ -529,19 +536,16 @@ export function CombatArenaLayout({
     const targetMonster =
       aliveMonsters[Math.floor(Math.random() * aliveMonsters.length)];
 
-    // Store monster health before attack for damage calculation
-    const monsterHealthBefore = targetMonster.health;
-
-    // Process the attack
+    // Process the attack and get damage dealt directly from result
     const result = combatManager.current.processPartyAttack(
       npc.id,
       targetMonster.id
     );
 
-    // Calculate damage dealt
-    const damageDealt = monsterHealthBefore - targetMonster.health;
+    // Use the damage from the combat manager result
+    const damageDealt = result.damage;
 
-    // Update state while preserving attack times
+    // Get updated state from combat manager
     const newState = combatManager.current.getState();
     setGameState((prev) => ({
       ...prev,
@@ -561,9 +565,15 @@ export function CombatArenaLayout({
       damageLog: newState.damageLog,
     }));
 
+    // Get the updated monster from the combat manager state
+    const updatedMonster = newState.monsters.find(
+      (m) => m.id === targetMonster.id
+    );
+    const updatedHealth = updatedMonster?.health || targetMonster.health;
+
     // Persist monster health to database
     if (damageDealt > 0) {
-      persistMonsterHealth(targetMonster.id, targetMonster.health);
+      persistMonsterHealth(targetMonster.id, updatedHealth);
     }
 
     // Set next attack time
@@ -574,11 +584,6 @@ export function CombatArenaLayout({
     if (!npc.attackInterval) return;
 
     const nextAttackTime = Date.now() + npc.attackInterval * 1000;
-    console.log(
-      `🕐 [CombatArenaLayout] Setting next attack time for ${npc.name}: ${
-        npc.attackInterval
-      }s from now (${new Date(nextAttackTime).toLocaleTimeString()})`
-    );
 
     // Update the ref immediately
     attackTimesRef.current[npc.id] = nextAttackTime;
@@ -587,11 +592,6 @@ export function CombatArenaLayout({
     setGameState((prev) => {
       const updatedParty = prev.party.map((member) =>
         member.id === npc.id ? { ...member, nextAttackTime } : member
-      );
-      console.log(
-        `🔄 [CombatArenaLayout] Updated party member ${
-          npc.name
-        } nextAttackTime to ${new Date(nextAttackTime).toLocaleTimeString()}`
       );
       return {
         ...prev,
@@ -602,9 +602,6 @@ export function CombatArenaLayout({
 
   // Monster Attack System
   const performMonsterAttack = (monster: EnhancedMonster) => {
-    console.log(
-      `🚨 [CombatArenaLayout] performMonsterAttack called for ${monster.name}`
-    );
     if (!combatManager.current) return;
 
     // Find a random alive party member to attack
@@ -621,11 +618,6 @@ export function CombatArenaLayout({
     const blockState =
       blockStatesRef.current[monster.id] || gameState.blockStates[monster.id];
     const blockStatus = blockState?.blockStatus || "none";
-
-    console.log(
-      `⚔️ [CombatArenaLayout] Monster ${monster.name} attacking ${target.name} with block status: ${blockStatus}`
-    );
-    console.log(`🔍 [CombatArenaLayout] Block state found:`, blockState);
 
     // Process the monster attack with block status
     combatManager.current.processMonsterAttack(
@@ -650,11 +642,14 @@ export function CombatArenaLayout({
       });
     }
 
-    // Calculate damage dealt
-    const damageDealt = targetHealthBefore - target.currentHealth;
-
-    // Update state while preserving attack times
+    // Update state from combat manager to get the latest target health
     const newState = combatManager.current.getState();
+    const updatedTarget = newState.party.find((m) => m.id === target.id);
+
+    // Calculate damage dealt using the updated target health
+    const damageDealt =
+      targetHealthBefore -
+      (updatedTarget?.currentHealth || target.currentHealth);
     setGameState((prev) => ({
       ...prev,
       monsters: newState.monsters.map((monster) => ({
@@ -689,11 +684,6 @@ export function CombatArenaLayout({
   const setNextMonsterAttackTime = (monster: EnhancedMonster) => {
     const nextAttackTime =
       Date.now() + monster.attackInterval * 1000 + Math.random() * 1000;
-    console.log(
-      `🕐 [CombatArenaLayout] Setting next attack time for ${monster.name}: ${
-        monster.attackInterval
-      }s from now (${new Date(nextAttackTime).toLocaleTimeString()})`
-    );
 
     // Update the ref immediately
     attackTimesRef.current[monster.id] = nextAttackTime;
@@ -702,11 +692,6 @@ export function CombatArenaLayout({
     setGameState((prev) => {
       const updatedMonsters = prev.monsters.map((m) =>
         m.id === monster.id ? { ...m, nextAttackTime } : m
-      );
-      console.log(
-        `🔄 [CombatArenaLayout] Updated monster ${
-          monster.name
-        } nextAttackTime to ${new Date(nextAttackTime).toLocaleTimeString()}`
       );
       return {
         ...prev,
@@ -749,6 +734,11 @@ export function CombatArenaLayout({
           newHealth: newHealth,
         });
       }
+
+      // Trigger health update callback to sync party UI
+      if (onHealthUpdate) {
+        onHealthUpdate();
+      }
     } catch (error) {
       console.error(
         `❌ [CombatArenaLayout] Failed to persist party member health:`,
@@ -784,13 +774,74 @@ export function CombatArenaLayout({
   const loadCombatState = () => {
     try {
       const savedState = localStorage.getItem(`combat-state-${phaseNumber}`);
+
       if (savedState) {
         const combatData = JSON.parse(savedState);
+        const savedMonsters = combatData.monsters?.map((m: any) => ({
+          id: m.id,
+          name: m.name,
+          health: m.health,
+        }));
 
-        // Restore the combat state
+        // Validate that saved monsters match current database monsters
+        if (savedMonsters && savedMonsters.length > 0) {
+          // Check if the number of monsters matches
+          if (savedMonsters.length !== monsters.length) {
+            localStorage.removeItem(`combat-state-${phaseNumber}`);
+            return false;
+          }
+
+          // Check if monster IDs match (more strict validation)
+          const savedIds = savedMonsters.map((m: any) => m.id).sort();
+          const databaseIds = monsters.map((m) => m.id).sort();
+          const idsMatch =
+            JSON.stringify(savedIds) === JSON.stringify(databaseIds);
+
+          if (!idsMatch) {
+            localStorage.removeItem(`combat-state-${phaseNumber}`);
+            return false;
+          }
+        }
+
+        // Merge saved monsters with database monsters to preserve combat state
+        const mergedMonsters = (combatData.monsters || []).map(
+          (savedMonster: any) => {
+            // Find the corresponding monster from database (props)
+            const dbMonster = monsters.find((m) => m.id === savedMonster.id);
+            if (dbMonster) {
+              // Use localStorage health (correct combat state) but keep database maxHealth
+              return {
+                ...savedMonster,
+                health: savedMonster.health, // Use localStorage health (includes dead monsters)
+                maxHealth: dbMonster.maxHealth, // Use database maxHealth
+              };
+            }
+            return savedMonster;
+          }
+        );
+
+        const mergeData = {
+          saved: combatData.monsters?.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            health: m.health,
+          })),
+          database: monsters.map((m) => ({
+            id: m.id,
+            name: m.name,
+            health: m.health,
+          })),
+          merged: mergedMonsters.map((m: any) => ({
+            id: m.id,
+            name: m.name,
+            health: m.health,
+          })),
+        };
+
+        // Restore the combat state with merged monsters
         setGameState((prev) => ({
           ...prev,
-          monsters: combatData.monsters || [],
+          monsters: mergedMonsters,
           party: combatData.party || [],
           damageLog: combatData.damageLog || [],
           blockStates: combatData.blockStates || {},
@@ -800,9 +851,25 @@ export function CombatArenaLayout({
           completionHandled: combatData.completionHandled || false,
         }));
 
-        // Restore combat manager state
-        if (combatManager.current && combatData.monsters && combatData.party) {
-          combatManager.current.restoreState(combatData);
+        // Restore combat manager state with merged data
+        if (combatManager.current && mergedMonsters && combatData.party) {
+          // Reset attack times to prevent infinite loops from old timestamps
+          const now = Date.now();
+          const resetMonsters = mergedMonsters.map((monster: any) => ({
+            ...monster,
+            nextAttackTime: now + (monster.attackInterval || 4000), // Reset to current time + interval
+          }));
+
+          const resetParty = combatData.party.map((member: any) => ({
+            ...member,
+            nextAttackTime: now + (member.attackInterval || 6000), // Reset to current time + interval
+          }));
+
+          combatManager.current.restoreState({
+            ...combatData,
+            monsters: resetMonsters,
+            party: resetParty,
+          });
         }
 
         return true;
@@ -866,17 +933,27 @@ export function CombatArenaLayout({
             </h2>
 
             {aliveMonsters.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 w-full">
+              <div
+                className={`grid gap-4 w-full ${
+                  hasBossMonster
+                    ? "grid-cols-1 place-items-center" // Center single boss
+                    : "grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+                }`}
+              >
                 {aliveMonsters.map((monster) => (
-                  <MonsterCard
+                  <div
                     key={monster.id}
-                    monster={monster}
-                    currentTime={currentTime}
-                    onClick={handleMonsterClick}
-                    onRightClick={handleMonsterRightClick}
-                    isClickable={monster.health > 0}
-                    blockState={gameState.blockStates[monster.id]}
-                  />
+                    className={hasBossMonster ? "scale-200 transform" : ""}
+                  >
+                    <MonsterCard
+                      monster={monster}
+                      currentTime={currentTime}
+                      onClick={handleMonsterClick}
+                      onRightClick={handleMonsterRightClick}
+                      isClickable={monster.health > 0}
+                      blockState={gameState.blockStates[monster.id]}
+                    />
+                  </div>
                 ))}
               </div>
             ) : (

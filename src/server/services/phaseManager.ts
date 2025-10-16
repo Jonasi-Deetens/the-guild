@@ -92,6 +92,11 @@ export class PhaseManager {
       session.mission.totalPhases
     );
 
+    console.log(
+      `🎲 [PhaseManager] Generated monsters for phase ${phaseNumber}:`,
+      monsters
+    );
+
     // Update phase with spawned monsters
     const updatedPhase = await db.missionPhase.update({
       where: { id: phase.id },
@@ -101,6 +106,11 @@ export class PhaseManager {
         startedAt: new Date(),
       },
     });
+
+    console.log(
+      `🎲 [PhaseManager] Updated phase ${phaseNumber} with monsters:`,
+      updatedPhase.monstersSpawned
+    );
 
     // Update session current phase
     await db.dungeonSession.update({
@@ -134,6 +144,14 @@ export class PhaseManager {
       throw new Error(`Mission ${missionId} not found`);
     }
 
+    console.log(`🔍 [PhaseManager] Mission data:`, {
+      id: mission.id,
+      name: mission.name,
+      monsterPoolIds: mission.monsterPoolIds,
+      finalBossTemplateId: mission.finalBossTemplateId,
+      totalPhases: mission.totalPhases,
+    });
+
     let monsters: PhaseMonster[] = [];
 
     if (phaseNumber === totalPhases && mission.finalBossTemplateId) {
@@ -156,6 +174,9 @@ export class PhaseManager {
 
       // Generate 2-4 monsters for regular phases
       const monsterCount = Math.floor(Math.random() * 3) + 2; // 2-4 monsters
+      console.log(
+        `🎲 [PhaseManager] Generating ${monsterCount} monsters from pool`
+      );
 
       for (let i = 0; i < monsterCount; i++) {
         const randomTemplateId =
@@ -163,11 +184,21 @@ export class PhaseManager {
             Math.floor(Math.random() * mission.monsterPoolIds.length)
           ];
 
+        console.log(
+          `🎲 [PhaseManager] Generating monster ${
+            i + 1
+          }/${monsterCount} from template ${randomTemplateId}`
+        );
         const monster = await MonsterService.generateMonsterFromTemplate(
           randomTemplateId
         );
         if (monster) {
+          console.log(`✅ [PhaseManager] Generated monster:`, monster.name);
           monsters.push(monster);
+        } else {
+          console.warn(
+            `❌ [PhaseManager] Failed to generate monster from template ${randomTemplateId}`
+          );
         }
       }
     }
@@ -292,11 +323,13 @@ export class PhaseManager {
       throw new Error(`Phase ${phaseNumber} is not in RESTING status`);
     }
 
-    // Apply time penalty if they rested
+    // Apply time penalty and healing if they rested
     if (didRest) {
       const restDuration = session.mission.restDuration;
-      const currentTime = new Date();
-      const newEndTime = new Date(currentTime.getTime() + restDuration * 1000);
+      const currentEndTime = new Date(session.missionEndTime || new Date());
+      const newEndTime = new Date(
+        currentEndTime.getTime() - restDuration * 1000
+      );
 
       await db.dungeonSession.update({
         where: { id: sessionId },
@@ -304,7 +337,14 @@ export class PhaseManager {
       });
 
       console.log(
-        `⏰ [PhaseManager] Applied ${restDuration}s time penalty for resting`
+        `⏰ [PhaseManager] Applied ${restDuration}s time penalty for resting (subtracted from mission time)`
+      );
+
+      // Apply rest effects (healing)
+      const { RestPhaseService } = await import("./restPhaseService");
+      await RestPhaseService.applyRestEffects(sessionId);
+      console.log(
+        `💤 [PhaseManager] Applied rest effects for session ${sessionId}`
       );
     }
 
@@ -327,6 +367,16 @@ export class PhaseManager {
         data: { status: "COMPLETED" },
       });
       console.log(`🎉 [PhaseManager] All phases completed! Mission finished.`);
+
+      // Apply mission completion rewards
+      const { RewardService } = await import("./rewardService");
+      const { LootService } = await import("./lootService");
+
+      await RewardService.applyMissionCompletionRewards(sessionId);
+      console.log(`💰 [PhaseManager] Mission completion rewards applied`);
+
+      await LootService.generateMissionLoot(sessionId);
+      console.log(`🎁 [PhaseManager] Mission completion loot generated`);
     }
 
     console.log(`🏃 [PhaseManager] Rest period ended for phase ${phaseNumber}`);

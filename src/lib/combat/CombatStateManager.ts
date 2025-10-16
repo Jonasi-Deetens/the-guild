@@ -538,7 +538,6 @@ export class CombatStateManager {
     this.blockStates[monsterId] = {
       ...blockState,
       isHolding: true,
-      blockStartTime: Date.now(),
     };
   }
 
@@ -552,7 +551,6 @@ export class CombatStateManager {
     this.blockStates[monsterId] = {
       ...blockState,
       isHolding: false,
-      blockEndTime: Date.now(),
     };
   }
 
@@ -580,27 +578,6 @@ export class CombatStateManager {
   }
 
   /**
-   * Handle block button click
-   */
-  handleBlockClick(monsterId: string): void {
-    const blockState = this.blockStates[monsterId];
-    if (!blockState || !blockState.isVisible) return;
-
-    blockState.isHolding = true;
-    blockState.clickTime = Date.now();
-  }
-
-  /**
-   * Handle block button release
-   */
-  handleBlockRelease(monsterId: string): void {
-    const blockState = this.blockStates[monsterId];
-    if (!blockState) return;
-
-    blockState.isHolding = false;
-  }
-
-  /**
    * Process monster attack with block/parry mechanics
    */
   processMonsterAttack(
@@ -610,10 +587,6 @@ export class CombatStateManager {
   ): void {
     const monster = this.monsters.find((m) => m.id === monsterId);
     const blockState = this.blockStates[monsterId];
-
-    console.log(
-      `🛡️ [CombatStateManager] Processing monster attack: ${monster?.name}, blockStatus: ${blockStatus}`
-    );
 
     if (!monster) return;
 
@@ -638,14 +611,9 @@ export class CombatStateManager {
     // Apply block/parry effects
     let finalDamage = damage;
 
-    console.log(
-      `💥 [CombatStateManager] Base damage: ${damage}, blockStatus: ${blockStatus}`
-    );
-
     if (blockStatus === "parry") {
       finalDamage = 0;
       this.totalPerfectParries++;
-      console.log(`🛡️ [CombatStateManager] PARRY! Damage reduced to 0`);
 
       this.addDamageEvent({
         type: "parry",
@@ -657,9 +625,6 @@ export class CombatStateManager {
     } else if (blockStatus === "block") {
       finalDamage = Math.floor(damage * 0.5); // 50% damage reduction
       this.totalBlocks++;
-      console.log(
-        `🛡️ [CombatStateManager] BLOCK! Damage reduced from ${damage} to ${finalDamage}`
-      );
 
       this.addDamageEvent({
         type: "block",
@@ -669,9 +634,6 @@ export class CombatStateManager {
         timestamp: Date.now(),
       });
     } else {
-      console.log(
-        `⚔️ [CombatStateManager] No block/parry, full damage: ${finalDamage}`
-      );
     }
 
     // Apply damage
@@ -683,7 +645,7 @@ export class CombatStateManager {
       }
 
       this.addDamageEvent({
-        type: "damage_taken",
+        type: "damage_dealt",
         amount: finalDamage,
         source: monster.name,
         target: target.name,

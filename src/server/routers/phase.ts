@@ -455,13 +455,17 @@ export const phaseRouter = createTRPCRouter({
    * Update monster health in the database
    */
   updateMonsterHealth: protectedProcedure
-    .input(z.object({
-      sessionId: z.string(),
-      phaseNumber: z.number(),
-      monsterId: z.string(),
-      newHealth: z.number().min(0),
-    }))
+    .input(
+      z.object({
+        sessionId: z.string(),
+        phaseNumber: z.number(),
+        monsterId: z.string(),
+        newHealth: z.number().min(0),
+      })
+    )
     .mutation(async ({ ctx, input }) => {
+      console.log(`💾 [PhaseRouter] updateMonsterHealth called:`, input);
+
       // Get current character
       const character = await ctx.db.character.findUnique({
         where: { userId: ctx.session.user.id },
@@ -519,9 +523,19 @@ export const phaseRouter = createTRPCRouter({
 
       // Update monster health in the monstersSpawned array
       const monstersSpawned = (phase.monstersSpawned as any[]) || [];
-      const monsterIndex = monstersSpawned.findIndex(m => m.id === input.monsterId);
-      
+      console.log(
+        `🔍 [PhaseRouter] Looking for monster ${input.monsterId} in:`,
+        monstersSpawned.map((m) => ({ id: m.id, name: m.name }))
+      );
+
+      const monsterIndex = monstersSpawned.findIndex(
+        (m) => m.id === input.monsterId
+      );
+
       if (monsterIndex === -1) {
+        console.error(
+          `❌ [PhaseRouter] Monster ${input.monsterId} not found in phase`
+        );
         throw new Error("Monster not found in phase");
       }
 
@@ -534,7 +548,110 @@ export const phaseRouter = createTRPCRouter({
         data: { monstersSpawned },
       });
 
-      console.log(`💾 [PhaseRouter] Updated monster ${input.monsterId} health to ${input.newHealth}`);
+      console.log(
+        `💾 [PhaseRouter] Updated monster ${input.monsterId} health to ${input.newHealth}`
+      );
+
+      return { success: true };
+    }),
+
+  /**
+   * Complete mission directly (for final phase without rest period)
+   */
+  completeMission: protectedProcedure
+    .input(
+      z.object({
+        sessionId: z.string(),
+        phaseNumber: z.number(),
+      })
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { sessionId, phaseNumber } = input;
+
+      // Get current character
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      // Verify user has access to this session
+      const session = await ctx.db.dungeonSession.findUnique({
+        where: { id: sessionId },
+        include: {
+          mission: true,
+          party: {
+            include: {
+              members: {
+                include: {
+                  character: true,
+                  npcCompanion: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+      if (!session) {
+        throw new Error("Session not found");
+      }
+
+      // Check access: either solo session or party member
+      if (session.partyId) {
+        const isPartyMember = await ctx.db.partyMember.findFirst({
+          where: {
+            partyId: session.partyId,
+            characterId: character.id,
+          },
+        });
+
+        if (!isPartyMember) {
+          throw new Error("Access denied");
+        }
+      } else {
+        // Solo session - allow access (no additional checks needed)
+      }
+
+      // Verify this is the final phase
+      if (phaseNumber !== session.mission.totalPhases) {
+        throw new Error("Can only complete mission on final phase");
+      }
+
+      // Mark the final phase as completed
+      await ctx.db.missionPhase.updateMany({
+        where: {
+          sessionId,
+          phaseNumber,
+        },
+        data: {
+          status: "COMPLETED",
+          completedAt: new Date(),
+        },
+      });
+
+      // Complete the mission directly
+      await ctx.db.dungeonSession.update({
+        where: { id: sessionId },
+        data: {
+          status: "COMPLETED",
+          missionEndTime: new Date(),
+        },
+      });
+
+      console.log(`🎉 [PhaseRouter] Mission completed directly!`);
+
+      // Apply mission completion rewards
+      const { RewardService } = await import("../services/rewardService");
+      const { LootService } = await import("../services/lootService");
+
+      await RewardService.applyMissionCompletionRewards(sessionId);
+      console.log(`💰 [PhaseRouter] Mission completion rewards applied`);
+
+      await LootService.generateMissionLoot(sessionId);
+      console.log(`🎁 [PhaseRouter] Mission completion loot generated`);
 
       return { success: true };
     }),

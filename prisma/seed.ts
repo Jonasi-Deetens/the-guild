@@ -262,13 +262,6 @@ async function main() {
       finalBossTemplateId: null, // Will be set after monster templates are created
       monsterPoolIds: [], // Will be populated with training dummy IDs
       restDuration: 30, // 30 seconds rest penalty
-      // Legacy fields (to be removed later)
-      minEventInterval: 20,
-      maxEventInterval: 40,
-      missionType: "CLEAR",
-      failCondition: "DEATH_ONLY",
-      bossTemplateId: null,
-      maxMonstersPerEncounter: 3,
       isActive: true,
     },
     {
@@ -474,21 +467,20 @@ async function main() {
     const trainingMonsters = await prisma.monsterTemplate.findMany({
       where: {
         name: {
-          in: [
-            "Training Dummy",
-            "Advanced Training Dummy",
-            "Master Training Dummy",
-          ],
+          in: ["Training Dummy", "Advanced Training Dummy"],
         },
       },
     });
+
+    const bossTemplate = await prisma.monsterTemplate.findFirst({
+      where: { name: "Master Training Dummy" },
+    });
+
     await prisma.mission.update({
       where: { id: trainingMission.id },
       data: {
         monsterPoolIds: trainingMonsters.map((m) => m.id),
-        finalBossTemplateId:
-          trainingMonsters.find((m) => m.name === "Master Training Dummy")
-            ?.id || null,
+        finalBossTemplateId: bossTemplate?.id || null,
       },
     });
     console.log(

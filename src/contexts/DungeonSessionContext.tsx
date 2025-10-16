@@ -176,7 +176,7 @@ export function DungeonSessionProvider({
     refetch: refetchCharacter,
     isLoading: characterLoading,
   } = api.character.getCurrentCharacter.useQuery(undefined, {
-    refetchInterval: 2000, // Poll every 2 seconds to get updated stats
+    refetchInterval: 500, // Poll every 500ms for real-time combat updates
   });
 
   // Start mission mutation

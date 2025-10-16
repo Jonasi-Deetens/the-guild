@@ -98,6 +98,9 @@ model Character {
   hiredNPCs    HiredNPC[]
   unlockedNPCs UnlockedNPC[]
 
+  // Solo dungeon sessions
+  dungeonSessions DungeonSession[]
+
   @@index([isOnline])
   @@index([reputation])
   @@index([gold])
@@ -242,9 +245,11 @@ model DungeonSession {
   updatedAt        DateTime           @updatedAt
   missionId        String
   partyId          String?
+  characterId      String? // For solo sessions
   loot             DungeonLoot[]
   mission          Mission            @relation(fields: [missionId], references: [id])
   party            Party?             @relation(fields: [partyId], references: [id])
+  character        Character?         @relation(fields: [characterId], references: [id])
   statistics       DungeonStatistics?
   turns            DungeonTurn[]
   phases           MissionPhase[]

@@ -122,8 +122,7 @@ export class CombatService {
             generatedLoot
           );
 
-          // Check if this was a phase combat and complete the phase
-          await this.handlePhaseCompletion(event.sessionId, minigameResult);
+          // Phase completion is now handled by the frontend through tRPC mutations
 
           return {
             success: true,
@@ -383,44 +382,6 @@ export class CombatService {
     return Math.floor(baseAttack * levelModifier);
   }
 
-  /**
-   * Handle phase completion when all monsters in a phase are defeated
-   */
-  private static async handlePhaseCompletion(
-    sessionId: string,
-    minigameResult: any
-  ): Promise<void> {
-    try {
-      // Get current phase data
-      const phaseData = await PhaseManager.getCurrentPhase(sessionId);
-
-      if (!phaseData || !phaseData.currentPhase) {
-        console.log(
-          `⚠️ [CombatService] No current phase found for session ${sessionId}`
-        );
-        return;
-      }
-
-      const { currentPhase } = phaseData;
-
-      // Check if this is a phase combat (not a regular event)
-      if (currentPhase.status === "ACTIVE" && minigameResult.victory) {
-        console.log(
-          `🎯 [CombatService] Phase ${currentPhase.phaseNumber} completed for session ${sessionId}`
-        );
-
-        // Complete the current phase
-        await PhaseManager.completePhase(sessionId, currentPhase.phaseNumber);
-
-        console.log(
-          `✅ [CombatService] Phase ${currentPhase.phaseNumber} marked as completed`
-        );
-      }
-    } catch (error) {
-      console.error(
-        `❌ [CombatService] Error handling phase completion:`,
-        error
-      );
-    }
-  }
+  // Phase completion is now handled by the frontend through tRPC mutations
+  // This method has been removed to avoid duplicate phase completion logic
 }

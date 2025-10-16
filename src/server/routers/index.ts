@@ -11,6 +11,7 @@ import { statisticsRouter } from "./statistics";
 import { monsterRouter } from "./monster";
 import { npcRouter } from "./npc";
 import { phaseRouter } from "./phase";
+import { missionCleanupRouter } from "./missionCleanup";
 
 export const appRouter = createTRPCRouter({
   character: characterRouter,
@@ -25,6 +26,7 @@ export const appRouter = createTRPCRouter({
   monster: monsterRouter,
   npc: npcRouter,
   phase: phaseRouter,
+  missionCleanup: missionCleanupRouter,
 });
 
 export type AppRouter = typeof appRouter;

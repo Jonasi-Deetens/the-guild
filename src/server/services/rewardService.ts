@@ -167,6 +167,7 @@ export class RewardService {
       where: { id: sessionId },
       include: {
         mission: true,
+        character: true, // Include character for solo sessions
         party: {
           include: {
             members: {
@@ -208,29 +209,23 @@ export class RewardService {
         }
       }
     } else {
-      // Handle solo missions - find the character from recent player actions
-      const recentAction = await db.dungeonPlayerAction.findFirst({
-        where: {
-          event: { sessionId: sessionId },
-        },
-        include: { character: true },
-        orderBy: { submittedAt: "desc" },
-      });
-
-      if (
-        recentAction?.character &&
-        recentAction.character.currentHealth != null &&
-        recentAction.character.currentHealth > 0
-      ) {
-        // Only alive characters get rewards
+      // Handle solo missions - use the character from the session
+      if (session.character && session.character.currentHealth > 0) {
+        console.log(
+          `🎯 [RewardService] Found character for solo session: ${session.character.name}`
+        );
         await this.applyEventRewards(
           sessionId,
           "mission_completion",
-          recentAction.character.id,
+          session.character.id,
           {
             gold: session.mission.baseReward,
             experience: session.mission.experienceReward,
           }
+        );
+      } else {
+        console.log(
+          `⚠️ [RewardService] Character not found or dead for solo session ${sessionId}`
         );
       }
     }

@@ -51,12 +51,14 @@ export function PhaseProgressIndicator({
     isActive: boolean,
     isCompleted: boolean
   ) => {
+    const isThisBoss = phaseNumber === totalPhases;
+
     if (isCompleted) {
       return "✅";
-    } else if (isActive) {
-      return isBossPhase ? "👑" : "⚔️";
+    } else if (isThisBoss) {
+      return "💀"; // Skull for boss phase
     } else {
-      return isBossPhase ? "👑" : "⚔️";
+      return "⚔️"; // Swords for regular phases
     }
   };
 

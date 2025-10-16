@@ -49,6 +49,7 @@ export class MissionScheduler {
       where: { status: "ACTIVE" },
       include: {
         mission: true,
+        character: true, // Include character for solo sessions
         party: {
           include: {
             members: {
@@ -293,6 +294,10 @@ export class MissionScheduler {
     console.log(`🎯 Initializing phases for mission ${sessionId}`);
     await PhaseManager.initializePhases(sessionId);
 
+    // Automatically start the first phase to spawn monsters
+    console.log(`🚀 Starting first phase for mission ${sessionId}`);
+    await PhaseManager.startPhase(sessionId, 1);
+
     console.log(
       `🎯 Started mission ${sessionId}, duration: ${
         session.mission.baseDuration
@@ -380,28 +385,13 @@ export class MissionScheduler {
 
       return aliveMembers.length === 0;
     } else {
-      // Solo mission - find the character from the session
-      // For solo missions, we need to find the character through the party leader relationship
-      const character = await db.character.findFirst({
-        where: {
-          ledParties: {
-            some: {
-              dungeonSessions: {
-                some: {
-                  id: session.id,
-                },
-              },
-            },
-          },
-        },
-      });
-
-      if (character) {
-        const isDead = character.currentHealth <= 0;
+      // Solo mission - use the character from the session
+      if (session.character) {
+        const isDead = session.character.currentHealth <= 0;
         console.log(`🔍 Solo mission death check:`, {
           sessionId: session.id,
-          characterId: character.id,
-          currentHealth: character.currentHealth,
+          characterId: session.character.id,
+          currentHealth: session.character.currentHealth,
           isDead: isDead,
         });
         return isDead;

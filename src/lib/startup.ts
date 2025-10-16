@@ -1,4 +1,5 @@
 import { MissionScheduler } from "@/server/services/missionScheduler";
+import { ScheduledCleanupService } from "@/server/services/scheduledCleanupService";
 
 let isInitialized = false;
 
@@ -12,6 +13,9 @@ export function initializeServices() {
 
   // Start the mission scheduler
   MissionScheduler.start();
+
+  // Start the scheduled cleanup service
+  ScheduledCleanupService.start();
 
   isInitialized = true;
   console.log("✅ Mission system services initialized");

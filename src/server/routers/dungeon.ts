@@ -53,6 +53,8 @@ export const dungeonRouter = createTRPCRouter({
           missionId: input.missionId,
           status: "WAITING",
           duration: mission.baseDuration,
+          // Store the character ID for solo sessions
+          characterId: character.id,
         },
       });
 
