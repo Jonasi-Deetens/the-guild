@@ -68,6 +68,7 @@ export default function CompanionsPage() {
   const { data: hiredNPCs } = api.npc.getHired.useQuery();
   const { data: character, isLoading: characterLoading } =
     api.character.getCurrentCharacter.useQuery();
+  const { data: goldAmount } = api.character.getGoldAmount.useQuery();
   const { data: myCurrentParty, isLoading: partyLoading } =
     api.party.getMyCurrent.useQuery();
 
@@ -208,7 +209,10 @@ export default function CompanionsPage() {
   const canHireNPC = (npc: NPCCompanion) => {
     if (!character || !myCurrentParty) return false;
     if (isNPCHired(npc.id)) return false;
-    if (npc.unlockType === "GOLD" && character.gold < npc.hireCost)
+    if (
+      npc.unlockType === "GOLD" &&
+      (goldAmount || character?.gold || 0) < npc.hireCost
+    )
       return false;
     if (npc.unlockType === "MILESTONE" && !isNPCUnlocked(npc.id)) return false;
     if (myCurrentParty.members.length >= myCurrentParty.maxMembers)

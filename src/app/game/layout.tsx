@@ -61,6 +61,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
   const { data: character, isLoading: characterLoading } =
     api.character.getCurrent.useQuery();
   const { data: canLevelUpData } = api.character.canLevelUp.useQuery();
+  const { data: goldAmount } = api.character.getGoldAmount.useQuery();
 
   // Calculate experience info from character data using shared utility
   const experienceInfo = character
@@ -75,7 +76,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
         name: character.name,
         level: character.level,
         experience: character.experience,
-        gold: character.gold,
+        gold: goldAmount || character.gold,
       });
     }
   }, [character]);
@@ -184,7 +185,7 @@ export default function GameLayout({ children }: GameLayoutProps) {
                       <span className="text-sm text-stone-300">Gold</span>
                       <span className="text-sm font-semibold text-yellow-400 flex items-center">
                         <Coins className="h-4 w-4 mr-1" />
-                        {character.gold}
+                        {goldAmount || character.gold}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -388,7 +389,9 @@ export default function GameLayout({ children }: GameLayoutProps) {
                   <div className="flex items-center space-x-2 text-sm text-stone-300">
                     <span>Lv.{character.level}</span>
                     <span>•</span>
-                    <span className="text-yellow-400">{character.gold}g</span>
+                    <span className="text-yellow-400">
+                      {goldAmount || character.gold}g
+                    </span>
                   </div>
                 </>
               ) : (

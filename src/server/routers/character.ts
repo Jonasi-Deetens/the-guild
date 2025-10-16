@@ -5,6 +5,7 @@ import {
   publicProcedure,
 } from "@/server/context";
 import { statisticsService } from "@/server/services/statisticsService";
+import { GoldService } from "@/server/services/goldService";
 import {
   getStatPointsPerLevel,
   validateStatAllocations,
@@ -67,6 +68,20 @@ export const characterRouter = createTRPCRouter({
     }
 
     return character;
+  }),
+
+  // Get gold amount from inventory
+  getGoldAmount: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    return await GoldService.getGoldAmount(character.id);
   }),
 
   // Update character health (for real-time combat updates)
@@ -142,9 +157,10 @@ export const characterRouter = createTRPCRouter({
       }
 
       // Check if character has enough gold
-      if (character.gold < goldCost) {
+      if (!(await GoldService.hasEnoughGold(character.id, goldCost))) {
+        const currentGold = await GoldService.getGoldAmount(character.id);
         throw new Error(
-          `Not enough gold. Need ${goldCost} gold for ${input.restType} rest.`
+          `Not enough gold. Need ${goldCost} gold for ${input.restType} rest. You have ${currentGold} gold.`
         );
       }
 
@@ -156,15 +172,20 @@ export const characterRouter = createTRPCRouter({
             character.maxHealth,
             character.currentHealth + healthRestored
           ),
-          gold: character.gold - goldCost,
         },
       });
+
+      // Remove gold using GoldService
+      await GoldService.removeGold(character.id, goldCost);
+
+      // Get current gold amount from inventory
+      const currentGold = await GoldService.getGoldAmount(character.id);
 
       return {
         healthRestored,
         goldCost,
         newHealth: updatedCharacter.currentHealth,
-        newGold: updatedCharacter.gold,
+        newGold: currentGold,
       };
     }),
 

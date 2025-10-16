@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { GoldService } from "./goldService";
 
 export interface LootDistributionResult {
   success: boolean;
@@ -297,15 +298,8 @@ export class LootDistributionService {
       const goldForMember = goldPerPlayer + (i < playerRemainder ? 1 : 0);
 
       if (goldForMember > 0) {
-        // Add gold directly to character
-        await db.character.update({
-          where: { id: member.id },
-          data: {
-            gold: {
-              increment: goldForMember,
-            },
-          },
-        });
+        // Add gold using GoldService
+        await GoldService.addGold(member.id, goldForMember);
 
         console.log(`💰 Gave ${goldForMember} gold to player ${member.name}`);
       }
@@ -363,15 +357,8 @@ export class LootDistributionService {
       const goldForMember = goldPerPlayer + (i < remainder ? 1 : 0);
 
       if (goldForMember > 0) {
-        // Add gold directly to character
-        await db.character.update({
-          where: { id: member.id },
-          data: {
-            gold: {
-              increment: goldForMember,
-            },
-          },
-        });
+        // Add gold using GoldService
+        await GoldService.addGold(member.id, goldForMember);
 
         console.log(`💰 Gave ${goldForMember} gold to player ${member.name}`);
       }
@@ -433,15 +420,8 @@ export class LootDistributionService {
       const goldForMember = goldPerPlayer + (i < remainder ? 1 : 0);
 
       if (goldForMember > 0) {
-        // Add gold directly to character
-        await db.character.update({
-          where: { id: member.characterId },
-          data: {
-            gold: {
-              increment: goldForMember,
-            },
-          },
-        });
+        // Add gold using GoldService
+        await GoldService.addGold(member.characterId, goldForMember);
 
         console.log(
           `💰 Gave ${goldForMember} gold to player ${member.character?.name}`

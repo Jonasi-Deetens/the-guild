@@ -144,83 +144,130 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {inventory.map((item) => (
-              <Card
-                key={item.id}
-                className={`glass cursor-pointer transition-all hover:scale-105 ${
-                  item.equipped ? "ring-2 ring-yellow-400" : ""
-                } ${getRarityBorder(item.item.rarity)}`}
-                onClick={() => setSelectedItem(item)}
-              >
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center space-x-2">
-                      {getItemIcon(item.item.type)}
-                      <div>
-                        <h3 className="font-semibold text-white">
-                          {item.item.name}
-                        </h3>
-                        <p
-                          className={`text-sm ${getRarityColor(
-                            item.item.rarity
-                          )}`}
-                        >
-                          {item.item.rarity}
-                        </p>
+          <div className="space-y-6">
+            {/* Gold Display - Prominent at top */}
+            {(() => {
+              const goldItem = inventory.find(
+                (item) =>
+                  item.item.name === "Gold" && item.item.type === "CURRENCY"
+              );
+              return goldItem ? (
+                <Card className="glass border-2 border-yellow-400 bg-gradient-to-r from-yellow-900/20 to-amber-900/20">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className="bg-yellow-400 p-3 rounded-full">
+                          <Coins className="h-8 w-8 text-yellow-900" />
+                        </div>
+                        <div>
+                          <h3 className="text-2xl font-bold text-yellow-400">
+                            Gold
+                          </h3>
+                          <p className="text-yellow-200">Universal currency</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-3xl font-bold text-yellow-400">
+                          {goldItem.quantity.toLocaleString()}
+                        </div>
+                        <div className="text-yellow-200 text-sm">
+                          Gold Coins
+                        </div>
                       </div>
                     </div>
-                    {item.equipped && (
-                      <div className="bg-yellow-400 text-black text-xs px-2 py-1 rounded font-semibold">
-                        EQUIPPED
-                      </div>
-                    )}
-                  </div>
+                  </CardContent>
+                </Card>
+              ) : null;
+            })()}
 
-                  <p className="text-gray-400 text-sm mb-3 line-clamp-2">
-                    {item.item.description}
-                  </p>
+            {/* Other Items */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {inventory
+                .filter(
+                  (item) =>
+                    !(
+                      item.item.name === "Gold" && item.item.type === "CURRENCY"
+                    )
+                )
+                .map((item) => (
+                  <Card
+                    key={item.id}
+                    className={`glass cursor-pointer transition-all hover:scale-105 ${
+                      item.equipped ? "ring-2 ring-yellow-400" : ""
+                    } ${getRarityBorder(item.item.rarity)}`}
+                    onClick={() => setSelectedItem(item)}
+                  >
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center space-x-2">
+                          {getItemIcon(item.item.type)}
+                          <div>
+                            <h3 className="font-semibold text-white">
+                              {item.item.name}
+                            </h3>
+                            <p
+                              className={`text-sm ${getRarityColor(
+                                item.item.rarity
+                              )}`}
+                            >
+                              {item.item.rarity}
+                            </p>
+                          </div>
+                        </div>
+                        {item.equipped && (
+                          <div className="bg-yellow-400 text-black text-xs px-2 py-1 rounded font-semibold">
+                            EQUIPPED
+                          </div>
+                        )}
+                      </div>
 
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center space-x-1 text-yellow-400">
-                      <Coins className="h-4 w-4" />
-                      <span>{item.item.value}</span>
-                    </div>
-                    {item.quantity > 1 && (
-                      <span className="text-gray-400">x{item.quantity}</span>
-                    )}
-                  </div>
+                      <p className="text-gray-400 text-sm mb-3 line-clamp-2">
+                        {item.item.description}
+                      </p>
 
-                  {/* Item Stats */}
-                  <div className="mt-3 space-y-1">
-                    {item.item.attack && (
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Sword className="h-4 w-4 text-orange-400" />
-                        <span className="text-gray-300">
-                          Attack: {item.item.attack}
-                        </span>
+                      <div className="flex items-center justify-between text-sm">
+                        <div className="flex items-center space-x-1 text-yellow-400">
+                          <Coins className="h-4 w-4" />
+                          <span>{item.item.value}</span>
+                        </div>
+                        {item.quantity > 1 && (
+                          <span className="text-gray-400">
+                            x{item.quantity}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    {item.item.defense && (
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Shield className="h-4 w-4 text-blue-400" />
-                        <span className="text-gray-300">
-                          Defense: {item.item.defense}
-                        </span>
+
+                      {/* Item Stats */}
+                      <div className="mt-3 space-y-1">
+                        {item.item.attack && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Sword className="h-4 w-4 text-orange-400" />
+                            <span className="text-gray-300">
+                              Attack: {item.item.attack}
+                            </span>
+                          </div>
+                        )}
+                        {item.item.defense && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Shield className="h-4 w-4 text-blue-400" />
+                            <span className="text-gray-300">
+                              Defense: {item.item.defense}
+                            </span>
+                          </div>
+                        )}
+                        {item.item.healing && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Heart className="h-4 w-4 text-red-400" />
+                            <span className="text-gray-300">
+                              Healing: {item.item.healing}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                    )}
-                    {item.item.healing && (
-                      <div className="flex items-center space-x-2 text-sm">
-                        <Heart className="h-4 w-4 text-red-400" />
-                        <span className="text-gray-300">
-                          Healing: {item.item.healing}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    </CardContent>
+                  </Card>
+                ))}
+            </div>
           </div>
         )}
 

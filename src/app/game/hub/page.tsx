@@ -51,6 +51,7 @@ export default function HubPage() {
   const { data: myCurrentParty, refetch: refetchMyParty } =
     api.party.getMyCurrent.useQuery();
   const { data: character } = api.character.getCurrent.useQuery();
+  const { data: goldAmount } = api.character.getGoldAmount.useQuery();
   const { data: onlinePlayers = [], isLoading: playersLoading } =
     api.character.getOnline.useQuery();
 
@@ -373,7 +374,7 @@ export default function HubPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-gray-400">Gold:</span>
                         <span className="text-yellow-400 font-semibold">
-                          {character.gold}
+                          {goldAmount || character.gold}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
@@ -408,7 +409,8 @@ export default function HubPage() {
                               );
                             }}
                             disabled={
-                              restMutation.isPending || character.gold < 10
+                              restMutation.isPending ||
+                              (goldAmount || character.gold) < 10
                             }
                             className="flex-1"
                           >
@@ -431,7 +433,8 @@ export default function HubPage() {
                               );
                             }}
                             disabled={
-                              restMutation.isPending || character.gold < 25
+                              restMutation.isPending ||
+                              (goldAmount || character.gold) < 25
                             }
                             className="flex-1"
                           >

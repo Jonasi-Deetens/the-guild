@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { GoldService } from "./goldService";
 
 export interface RewardData {
   gold?: number;
@@ -40,9 +41,9 @@ export class RewardService {
     await db.$transaction(async (tx) => {
       const updates: any = {};
 
-      // Apply gold reward
+      // Apply gold reward using GoldService
       if (rewards.gold && rewards.gold > 0) {
-        updates.gold = character.gold + rewards.gold;
+        await GoldService.addGold(characterId, rewards.gold);
       }
 
       // Apply experience reward

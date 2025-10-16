@@ -343,7 +343,7 @@ model Inventory {
   character   Character @relation(fields: [characterId], references: [id], onDelete: Cascade)
   item        Item      @relation(fields: [itemId], references: [id])
 
-  @@unique([characterId, itemId])
+  @@unique([characterId, itemId, equipped])
 }
 
 model Transaction {
@@ -559,6 +559,7 @@ enum ItemType {
   ARMOR
   CONSUMABLE
   MISC
+  CURRENCY
 }
 
 enum ItemRarity {

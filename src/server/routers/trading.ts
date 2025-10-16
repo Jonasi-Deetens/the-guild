@@ -4,6 +4,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/context";
+import { GoldService } from "@/server/services/goldService";
 
 export const tradingRouter = createTRPCRouter({
   // Create a trade request
@@ -47,7 +48,7 @@ export const tradingRouter = createTRPCRouter({
       }
 
       // Check if character has enough gold
-      if (character.gold < input.offeredGold) {
+      if (!(await GoldService.hasEnoughGold(character.id, input.offeredGold))) {
         throw new Error("Insufficient gold");
       }
 
@@ -166,7 +167,12 @@ export const tradingRouter = createTRPCRouter({
       }
 
       // Check if target character has enough gold
-      if (tradeRequest.toCharacter.gold < tradeRequest.requestedGold) {
+      if (
+        !(await GoldService.hasEnoughGold(
+          tradeRequest.toCharacter.id,
+          tradeRequest.requestedGold
+        ))
+      ) {
         throw new Error("Insufficient gold");
       }
 
@@ -269,26 +275,22 @@ export const tradingRouter = createTRPCRouter({
 
       // Execute the trade
       await ctx.db.$transaction(async (tx) => {
-        // Transfer gold
-        await tx.character.update({
-          where: { id: tradeRequest.fromCharacterId },
-          data: { gold: { decrement: tradeRequest.offeredGold } },
-        });
+        // Transfer gold using GoldService
+        if (tradeRequest.offeredGold > 0) {
+          await GoldService.transferGold(
+            tradeRequest.fromCharacterId,
+            tradeRequest.toCharacterId,
+            tradeRequest.offeredGold
+          );
+        }
 
-        await tx.character.update({
-          where: { id: tradeRequest.toCharacterId },
-          data: { gold: { increment: tradeRequest.offeredGold } },
-        });
-
-        await tx.character.update({
-          where: { id: tradeRequest.fromCharacterId },
-          data: { gold: { increment: tradeRequest.requestedGold } },
-        });
-
-        await tx.character.update({
-          where: { id: tradeRequest.toCharacterId },
-          data: { gold: { decrement: tradeRequest.requestedGold } },
-        });
+        if (tradeRequest.requestedGold > 0) {
+          await GoldService.transferGold(
+            tradeRequest.toCharacterId,
+            tradeRequest.fromCharacterId,
+            tradeRequest.requestedGold
+          );
+        }
 
         // Transfer items from sender to receiver
         for (const item of tradeRequest.offeredItems) {

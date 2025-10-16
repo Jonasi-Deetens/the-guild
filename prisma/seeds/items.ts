@@ -156,6 +156,20 @@ async function main() {
     },
   ];
 
+  // Currency items
+  const currency = [
+    {
+      name: "Gold",
+      description: "Universal currency used throughout the realm.",
+      type: "CURRENCY",
+      rarity: "COMMON",
+      value: 1,
+      isTradeable: true,
+      isStackable: true,
+      maxStack: 999999,
+    },
+  ];
+
   // Misc items
   const misc = [
     {
@@ -189,7 +203,7 @@ async function main() {
     },
   ];
 
-  const allItems = [...weapons, ...armor, ...consumables, ...misc];
+  const allItems = [...weapons, ...armor, ...consumables, ...currency, ...misc];
 
   console.log("📝 Creating items...");
 

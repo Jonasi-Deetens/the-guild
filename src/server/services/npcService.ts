@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { GoldService } from "./goldService";
 
 export interface NPCCompanion {
   id: string;
@@ -90,7 +91,7 @@ export class NPCService {
       // Get character and NPC
       const character = await db.character.findUnique({
         where: { id: characterId },
-        select: { gold: true, partyId: true },
+        select: { partyId: true },
       });
 
       const npc = await db.nPCCompanion.findUnique({
@@ -106,11 +107,18 @@ export class NPCService {
       }
 
       // Check if character has enough gold (for gold NPCs)
-      if (npc.unlockType === "GOLD" && character.gold < npc.hireCost) {
-        return {
-          success: false,
-          message: `Not enough gold. Need ${npc.hireCost}, have ${character.gold}`,
-        };
+      if (npc.unlockType === "GOLD") {
+        const hasEnoughGold = await GoldService.hasEnoughGold(
+          characterId,
+          npc.hireCost
+        );
+        if (!hasEnoughGold) {
+          const currentGold = await GoldService.getGoldAmount(characterId);
+          return {
+            success: false,
+            message: `Not enough gold. Need ${npc.hireCost}, have ${currentGold}`,
+          };
+        }
       }
 
       // Check if character is in a party
@@ -169,10 +177,16 @@ export class NPCService {
 
       // Deduct gold if it's a gold NPC
       if (npc.unlockType === "GOLD") {
-        await db.character.update({
-          where: { id: characterId },
-          data: { gold: character.gold - npc.hireCost },
-        });
+        const goldRemoved = await GoldService.removeGold(
+          characterId,
+          npc.hireCost
+        );
+        if (!goldRemoved) {
+          return {
+            success: false,
+            message: "Failed to deduct gold for hiring",
+          };
+        }
       }
 
       // Create hired NPC record

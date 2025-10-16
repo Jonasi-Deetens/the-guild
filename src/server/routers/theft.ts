@@ -4,6 +4,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/context";
+import { GoldService } from "@/server/services/goldService";
 
 export const theftRouter = createTRPCRouter({
   // Attempt to steal from another character
@@ -258,15 +259,15 @@ export const theftRouter = createTRPCRouter({
       }
 
       // Check if character has enough gold
-      if (character.gold < input.amount) {
-        throw new Error("Insufficient gold for bounty");
+      if (!(await GoldService.hasEnoughGold(character.id, input.amount))) {
+        const currentGold = await GoldService.getGoldAmount(character.id);
+        throw new Error(
+          `Insufficient gold for bounty. You have ${currentGold} gold, need ${input.amount}.`
+        );
       }
 
       // Deduct gold for bounty
-      await ctx.db.character.update({
-        where: { id: character.id },
-        data: { gold: { decrement: input.amount } },
-      });
+      await GoldService.removeGold(character.id, input.amount);
 
       // Create bounty
       const bounty = await ctx.db.bounty.create({

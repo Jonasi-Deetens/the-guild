@@ -232,7 +232,10 @@ export class LootService {
     // Generate base mission completion loot (gold coins)
     const baseGoldReward = session.mission.baseReward || 100;
     const goldItem = await db.item.findFirst({
-      where: { name: "Gold Coin" },
+      where: {
+        name: "Gold",
+        type: "CURRENCY",
+      },
     });
 
     if (goldItem) {
@@ -241,8 +244,6 @@ export class LootService {
           sessionId,
           itemId: goldItem.id,
           quantity: baseGoldReward,
-          rarity: "COMMON",
-          value: baseGoldReward,
         },
       });
       console.log(

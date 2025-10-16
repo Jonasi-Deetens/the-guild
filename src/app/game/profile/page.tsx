@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/Button";
+import { api } from "@/trpc/react";
 import {
   Card,
   CardContent,
@@ -27,25 +28,19 @@ import {
 
 export default function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
-  const [characterName, setCharacterName] = useState("TestPlayer");
+  const [characterName, setCharacterName] = useState("");
 
-  // Mock character data - will be replaced with real data from tRPC
-  const character = {
-    id: "1",
-    name: "TestPlayer",
-    level: 15,
-    experience: 2500,
-    gold: 1250,
-    reputation: 45,
-    health: 120,
-    maxHealth: 120,
-    attack: 25,
-    defense: 18,
-    speed: 12,
-    perception: 15,
-    createdAt: "2024-01-15",
-    lastSeen: "2024-01-20",
-  };
+  // Get real character data from tRPC
+  const { data: character, isLoading: characterLoading } =
+    api.character.getCurrent.useQuery();
+  const { data: goldAmount } = api.character.getGoldAmount.useQuery();
+
+  // Update character name when data loads
+  useEffect(() => {
+    if (character?.name) {
+      setCharacterName(character.name);
+    }
+  }, [character?.name]);
 
   const stats = {
     missionsCompleted: 23,
@@ -130,6 +125,19 @@ export default function ProfilePage() {
     setIsEditing(false);
   };
 
+  // Show loading state
+  if (characterLoading || !character) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 p-6">
+        <div className="max-w-6xl mx-auto">
+          <div className="text-center text-white">
+            <div className="text-xl">Loading character data...</div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -205,7 +213,7 @@ export default function ProfilePage() {
                   <span className="text-gray-400">Gold:</span>
                   <span className="text-yellow-400 flex items-center">
                     <Coins className="h-4 w-4 mr-1" />
-                    {character.gold.toLocaleString()}
+                    {(goldAmount || character?.gold || 0).toLocaleString()}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
