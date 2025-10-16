@@ -261,12 +261,21 @@ export function DungeonSessionProvider({
             let isDead = currentHealth <= 0;
 
             // Calculate attack interval based on speed (faster speed = shorter interval)
-            const baseAttackInterval = 6.0; // Base 6 seconds (even slower)
-            const speedFactor = Math.max(
-              0.8, // Minimum 0.8x speed (slower)
-              Math.min(1.3, member.npcCompanion.speed / 20) // Speed 20 = 1.0x, speed 26 = 1.3x
+            // Speed 3 = 8s, Speed 18 = 3s, with linear scaling
+            const minSpeed = 3;
+            const maxSpeed = 18;
+            const minInterval = 3.0; // Fastest attack (3 seconds)
+            const maxInterval = 8.0; // Slowest attack (8 seconds)
+
+            // Linear interpolation: speed 3 -> 8s, speed 18 -> 3s
+            const normalizedSpeed = Math.max(
+              minSpeed,
+              Math.min(maxSpeed, member.npcCompanion.speed)
             );
-            const attackInterval = baseAttackInterval / speedFactor;
+            const speedRatio =
+              (normalizedSpeed - minSpeed) / (maxSpeed - minSpeed);
+            const attackInterval =
+              maxInterval - speedRatio * (maxInterval - minInterval);
 
             return {
               id: member.npcCompanion.id,

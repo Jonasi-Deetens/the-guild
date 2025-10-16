@@ -2,6 +2,84 @@ import { z } from "zod";
 import { createTRPCRouter, protectedProcedure } from "@/server/context";
 import { PhaseManager } from "@/server/services/phaseManager";
 import { RestPhaseService } from "@/server/services/restPhaseService";
+import { db } from "@/lib/db";
+
+/**
+ * Helper function to dismiss all hired NPCs after mission completion
+ */
+async function dismissAllNPCsAfterMission(sessionId: string): Promise<void> {
+  try {
+    // Get the session with party information
+    const session = await db.dungeonSession.findUnique({
+      where: { id: sessionId },
+      include: {
+        party: {
+          include: {
+            members: {
+              include: {
+                character: true,
+              },
+            },
+          },
+        },
+        character: true, // For solo sessions
+      },
+    });
+
+    if (!session) {
+      console.error(
+        `[PhaseRouter] Session ${sessionId} not found for NPC dismissal`
+      );
+      return;
+    }
+
+    // Handle party missions
+    if (session.party) {
+      const partyMembers = session.party.members;
+
+      // Dismiss NPCs for each character in the party
+      for (const member of partyMembers) {
+        if (member.character) {
+          const { NPCService } = await import("../services/npcService");
+          const dismissResult = await NPCService.dismissAllNPCs(
+            member.character.id
+          );
+
+          if (dismissResult.success) {
+            console.log(
+              `👋 [PhaseRouter] Dismissed NPCs for character ${member.character.name}: ${dismissResult.message}`
+            );
+          } else {
+            console.error(
+              `❌ [PhaseRouter] Failed to dismiss NPCs for character ${member.character.name}: ${dismissResult.error}`
+            );
+          }
+        }
+      }
+    } else if (session.character) {
+      // Handle solo missions
+      const { NPCService } = await import("../services/npcService");
+      const dismissResult = await NPCService.dismissAllNPCs(
+        session.character.id
+      );
+
+      if (dismissResult.success) {
+        console.log(
+          `👋 [PhaseRouter] Dismissed NPCs for solo character ${session.character.name}: ${dismissResult.message}`
+        );
+      } else {
+        console.error(
+          `❌ [PhaseRouter] Failed to dismiss NPCs for solo character ${session.character.name}: ${dismissResult.error}`
+        );
+      }
+    }
+  } catch (error) {
+    console.error(
+      `❌ [PhaseRouter] Error dismissing NPCs after mission completion:`,
+      error
+    );
+  }
+}
 
 export const phaseRouter = createTRPCRouter({
   /**
@@ -646,12 +724,19 @@ export const phaseRouter = createTRPCRouter({
       // Apply mission completion rewards
       const { RewardService } = await import("../services/rewardService");
       const { LootService } = await import("../services/lootService");
+      const { NPCService } = await import("../services/npcService");
 
       await RewardService.applyMissionCompletionRewards(sessionId);
       console.log(`💰 [PhaseRouter] Mission completion rewards applied`);
 
       await LootService.generateMissionLoot(sessionId);
       console.log(`🎁 [PhaseRouter] Mission completion loot generated`);
+
+      // Dismiss all hired NPCs after mission completion
+      await dismissAllNPCsAfterMission(sessionId);
+      console.log(
+        `👋 [PhaseRouter] All hired NPCs dismissed after mission completion`
+      );
 
       return { success: true };
     }),

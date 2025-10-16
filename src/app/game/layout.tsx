@@ -20,6 +20,7 @@ import {
   Menu,
   Package,
   BarChart3,
+  Handshake,
 } from "@/components/icons";
 import { api } from "@/trpc/react";
 import { LevelUpNotification } from "@/components/game/LevelUpNotification";
@@ -294,6 +295,12 @@ export default function GameLayout({ children }: GameLayoutProps) {
               <Button variant="ghost" className="w-full justify-start">
                 <Users className="h-4 w-4 mr-2" />
                 Parties
+              </Button>
+            </Link>
+            <Link href="/game/companions">
+              <Button variant="ghost" className="w-full justify-start">
+                <Handshake className="h-4 w-4 mr-2" />
+                Companions
               </Button>
             </Link>
             <Link href="/game/missions">

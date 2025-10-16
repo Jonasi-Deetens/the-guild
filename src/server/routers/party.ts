@@ -4,6 +4,7 @@ import {
   protectedProcedure,
   publicProcedure,
 } from "@/server/context";
+import { NPCService } from "@/server/services/npcService";
 
 export const partyRouter = createTRPCRouter({
   // Update party loot distribution settings
@@ -429,6 +430,16 @@ export const partyRouter = createTRPCRouter({
       });
     }
 
+    // Dismiss all hired NPCs for this character
+    const dismissResult = await NPCService.dismissAllNPCs(character.id);
+    if (!dismissResult.success) {
+      console.error(
+        "Failed to dismiss NPCs when leaving party:",
+        dismissResult.error
+      );
+      // Continue with leaving party even if NPC dismissal fails
+    }
+
     // Remove character from party
     await ctx.db.partyMember.deleteMany({
       where: {
@@ -443,7 +454,10 @@ export const partyRouter = createTRPCRouter({
       data: { partyId: null },
     });
 
-    return { success: true };
+    return {
+      success: true,
+      message: dismissResult.message || "Successfully left party",
+    };
   }),
 
   // Clean up party data inconsistencies (for debugging)

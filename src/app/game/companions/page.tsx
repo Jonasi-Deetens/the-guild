@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/Button";
 import {
   Card,
@@ -18,7 +19,6 @@ import {
   Shield,
   Sword,
   Heart,
-  Eye,
   Zap,
   Crown,
   Lock,
@@ -46,10 +46,11 @@ interface NPCCompanion {
   unlockType: "GOLD" | "MILESTONE";
   unlockRequirement?: number;
   rarity: "COMMON" | "UNCOMMON" | "RARE" | "EPIC" | "LEGENDARY";
-  abilities?: any;
+  abilities?: Record<string, unknown>;
 }
 
 export default function CompanionsPage() {
+  const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedNPC, setSelectedNPC] = useState<NPCCompanion | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
@@ -65,15 +66,44 @@ export default function CompanionsPage() {
     api.npc.getAvailable.useQuery();
   const { data: unlockedNPCs } = api.npc.getUnlocked.useQuery();
   const { data: hiredNPCs } = api.npc.getHired.useQuery();
-  const { data: character } = api.character.getCurrentCharacter.useQuery();
-  const { data: myCurrentParty } = api.party.getMyCurrent.useQuery();
+  const { data: character, isLoading: characterLoading } =
+    api.character.getCurrentCharacter.useQuery();
+  const { data: myCurrentParty, isLoading: partyLoading } =
+    api.party.getMyCurrent.useQuery();
 
   // tRPC mutations
   const hireNPCMutation = api.npc.hire.useMutation();
   const dismissNPCMutation = api.npc.dismiss.useMutation();
   const checkUnlocksMutation = api.npc.checkUnlocks.useMutation();
 
-  // Filter NPCs
+  useEffect(() => {
+    // Only redirect if data has finished loading
+    if (characterLoading || partyLoading) {
+      return;
+    }
+
+    // Check if user is authenticated
+    if (!character) {
+      router.push("/auth/login");
+      return;
+    }
+
+    // Check if user is in a party
+    if (!myCurrentParty) {
+      router.push("/game/parties");
+      return;
+    }
+  }, [character, myCurrentParty, characterLoading, partyLoading, router]);
+
+  // Show loading while data is being fetched or while redirects are happening
+  if (characterLoading || partyLoading || !character || !myCurrentParty) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-stone-900 via-amber-950 to-stone-900 flex items-center justify-center">
+        <div className="text-white text-lg">Loading...</div>
+      </div>
+    );
+  }
+
   const filteredNPCs =
     availableNPCs?.filter((npc) => {
       const matchesSearch =
@@ -96,7 +126,6 @@ export default function CompanionsPage() {
       const result = await hireNPCMutation.mutateAsync({ npcId: npc.id });
       if (result.success) {
         setShowDetailsModal(false);
-        // Refresh data
         window.location.reload();
       } else {
         alert(result.message);
@@ -112,7 +141,6 @@ export default function CompanionsPage() {
       const result = await dismissNPCMutation.mutateAsync({ npcId: npc.id });
       if (result.success) {
         setShowDetailsModal(false);
-        // Refresh data
         window.location.reload();
       } else {
         alert(result.message);
@@ -128,7 +156,6 @@ export default function CompanionsPage() {
       const result = await checkUnlocksMutation.mutateAsync();
       if (result.success && result.newlyUnlocked.length > 0) {
         alert(result.message);
-        // Refresh data
         window.location.reload();
       }
     } catch (error) {
@@ -202,7 +229,6 @@ export default function CompanionsPage() {
 
   return (
     <div className="h-screen overflow-y-auto p-8 space-y-6">
-      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-bold text-white mb-2">Companions</h1>
@@ -216,7 +242,6 @@ export default function CompanionsPage() {
         </Button>
       </div>
 
-      {/* Search and Filters */}
       <div className="space-y-4">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
@@ -286,7 +311,6 @@ export default function CompanionsPage() {
         </div>
       </div>
 
-      {/* NPCs Grid */}
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredNPCs.map((npc) => (
           <Card
@@ -386,7 +410,6 @@ export default function CompanionsPage() {
         </div>
       )}
 
-      {/* NPC Details Modal */}
       {selectedNPC && (
         <Modal
           isOpen={showDetailsModal}
@@ -394,7 +417,6 @@ export default function CompanionsPage() {
           title={selectedNPC.name}
         >
           <div className="space-y-6">
-            {/* Basic Info */}
             <div className="space-y-2">
               <div className="flex items-center space-x-2">
                 <span
@@ -417,7 +439,6 @@ export default function CompanionsPage() {
               )}
             </div>
 
-            {/* Stats */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <h4 className="font-medium text-white">Combat Stats</h4>
@@ -468,7 +489,6 @@ export default function CompanionsPage() {
               </div>
             </div>
 
-            {/* Abilities */}
             {selectedNPC.abilities && (
               <div className="space-y-2">
                 <h4 className="font-medium text-white">Abilities</h4>
@@ -489,7 +509,6 @@ export default function CompanionsPage() {
               </div>
             )}
 
-            {/* Hire Info */}
             <div className="space-y-2">
               <h4 className="font-medium text-white">Hiring</h4>
               <div className="text-sm">
@@ -514,7 +533,6 @@ export default function CompanionsPage() {
               </div>
             </div>
 
-            {/* Actions */}
             <div className="flex space-x-3 pt-4">
               {isNPCHired(selectedNPC.id) ? (
                 <Button

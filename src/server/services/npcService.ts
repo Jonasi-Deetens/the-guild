@@ -187,6 +187,12 @@ export class NPCService {
         },
       });
 
+      // Set NPC's current health to their max health when hired
+      await db.nPCCompanion.update({
+        where: { id: npcId },
+        data: { currentHealth: npc.maxHealth },
+      });
+
       // Add NPC to party as a party member
       // For NPCs, we use null for characterId since they don't have a character record
       await db.partyMember.create({
@@ -209,6 +215,60 @@ export class NPCService {
       return {
         success: false,
         message: "Failed to hire NPC",
+        error: error instanceof Error ? error.message : "Unknown error",
+      };
+    }
+  }
+
+  /**
+   * Dismiss all NPCs for a character (used when leaving party)
+   */
+  static async dismissAllNPCs(characterId: string): Promise<HireResult> {
+    try {
+      // Get all hired NPCs for this character
+      const hiredNPCs = await db.hiredNPC.findMany({
+        where: { characterId },
+        include: { npcCompanion: true },
+      });
+
+      if (hiredNPCs.length === 0) {
+        return {
+          success: true,
+          message: "No NPCs to dismiss",
+        };
+      }
+
+      // Remove all NPCs from party members
+      for (const hiredNPC of hiredNPCs) {
+        const partyMember = await db.partyMember.findFirst({
+          where: {
+            characterId: null, // NPCs have null characterId
+            npcCompanionId: hiredNPC.npcCompanionId,
+            isNPC: true,
+          },
+        });
+
+        if (partyMember) {
+          await db.partyMember.delete({
+            where: { id: partyMember.id },
+          });
+        }
+      }
+
+      // Remove all hired NPC records
+      await db.hiredNPC.deleteMany({
+        where: { characterId },
+      });
+
+      return {
+        success: true,
+        message: `Successfully dismissed ${hiredNPCs.length} NPC(s)`,
+      };
+    } catch (error) {
+      console.error("Error dismissing all NPCs:", error);
+      return {
+        success: false,
+        message: "Failed to dismiss NPCs",
         error: error instanceof Error ? error.message : "Unknown error",
       };
     }
