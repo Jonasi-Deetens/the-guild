@@ -98,6 +98,18 @@ model Character {
   hiredNPCs    HiredNPC[]
   unlockedNPCs UnlockedNPC[]
 
+  // Equipment slots
+  equippedWeapon  String? // Item ID
+  equippedOffHand String? // Item ID  
+  equippedHead    String? // Item ID
+  equippedChest   String? // Item ID
+  equippedLegs    String? // Item ID
+  equippedBoots   String? // Item ID
+  equippedGloves  String? // Item ID
+  equippedRing1   String? // Item ID
+  equippedRing2   String? // Item ID
+  equippedAmulet  String? // Item ID
+
   // Solo dungeon sessions
   dungeonSessions DungeonSession[]
 
@@ -314,23 +326,42 @@ model DungeonLoot {
 }
 
 model Item {
-  id          String             @id @default(cuid())
-  name        String             @unique
+  id          String     @id @default(cuid())
+  name        String     @unique
   description String
   type        ItemType
-  rarity      ItemRarity         @default(COMMON)
+  rarity      ItemRarity @default(COMMON)
   value       Int
   attack      Int?
   defense     Int?
   healing     Int?
-  isTradeable Boolean            @default(true)
-  isStackable Boolean            @default(false)
-  maxStack    Int                @default(1)
-  createdAt   DateTime           @default(now())
-  dungeonLoot DungeonLoot[]
-  inventory   Inventory[]
-  Transaction Transaction[]
-  monsterLoot MonsterLootTable[]
+  isTradeable Boolean    @default(true)
+  isStackable Boolean    @default(false)
+  maxStack    Int        @default(1)
+
+  // Additional stat fields
+  health            Int?
+  attackPercent     Float? @default(0)
+  defensePercent    Float? @default(0)
+  speed             Int?
+  speedPercent      Float? @default(0)
+  perception        Int?
+  perceptionPercent Float? @default(0)
+
+  // Requirements
+  levelRequirement      Int @default(1)
+  attackRequirement     Int @default(0)
+  defenseRequirement    Int @default(0)
+  speedRequirement      Int @default(0)
+  perceptionRequirement Int @default(0)
+
+  // Equipment slot
+  equipmentSlot EquipmentSlot?
+  createdAt     DateTime           @default(now())
+  dungeonLoot   DungeonLoot[]
+  inventory     Inventory[]
+  Transaction   Transaction[]
+  monsterLoot   MonsterLootTable[]
 }
 
 model Inventory {
@@ -560,6 +591,19 @@ enum ItemType {
   CONSUMABLE
   MISC
   CURRENCY
+  ACCESSORY
+}
+
+enum EquipmentSlot {
+  WEAPON
+  OFF_HAND
+  HEAD
+  CHEST
+  LEGS
+  BOOTS
+  GLOVES
+  RING
+  AMULET
 }
 
 enum ItemRarity {

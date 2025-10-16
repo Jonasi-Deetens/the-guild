@@ -15,6 +15,13 @@ import {
   Zap,
 } from "@/components/icons";
 import { api } from "@/trpc/react";
+import {
+  meetsRequirements,
+  formatItemRequirements,
+  getRequirementClass,
+  getRarityClass,
+  getRarityBorderClass,
+} from "@/lib/utils/equipment";
 
 interface InventoryItem {
   id: string;
@@ -30,6 +37,19 @@ interface InventoryItem {
     attack?: number;
     defense?: number;
     healing?: number;
+    health?: number;
+    speed?: number;
+    perception?: number;
+    attackPercent?: number;
+    defensePercent?: number;
+    speedPercent?: number;
+    perceptionPercent?: number;
+    levelRequirement?: number;
+    attackRequirement?: number;
+    defenseRequirement?: number;
+    speedRequirement?: number;
+    perceptionRequirement?: number;
+    equipmentSlot?: string;
   };
 }
 
@@ -44,6 +64,7 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
   // tRPC queries and mutations
   const { data: inventory = [], refetch: refetchInventory } =
     api.character.getInventory.useQuery();
+  const { data: character } = api.character.getCurrent.useQuery();
   const useItemMutation = api.character.useItem.useMutation();
   const toggleEquipMutation = api.character.toggleEquip.useMutation();
 
@@ -243,7 +264,11 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                           <div className="flex items-center space-x-2 text-sm">
                             <Sword className="h-4 w-4 text-orange-400" />
                             <span className="text-gray-300">
-                              Attack: {item.item.attack}
+                              Attack: +{item.item.attack}
+                              {item.item.attackPercent &&
+                                ` (+${Math.round(
+                                  item.item.attackPercent * 100
+                                )}%)`}
                             </span>
                           </div>
                         )}
@@ -251,7 +276,43 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                           <div className="flex items-center space-x-2 text-sm">
                             <Shield className="h-4 w-4 text-blue-400" />
                             <span className="text-gray-300">
-                              Defense: {item.item.defense}
+                              Defense: +{item.item.defense}
+                              {item.item.defensePercent &&
+                                ` (+${Math.round(
+                                  item.item.defensePercent * 100
+                                )}%)`}
+                            </span>
+                          </div>
+                        )}
+                        {item.item.speed && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Zap className="h-4 w-4 text-green-400" />
+                            <span className="text-gray-300">
+                              Speed: +{item.item.speed}
+                              {item.item.speedPercent &&
+                                ` (+${Math.round(
+                                  item.item.speedPercent * 100
+                                )}%)`}
+                            </span>
+                          </div>
+                        )}
+                        {item.item.perception && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Eye className="h-4 w-4 text-purple-400" />
+                            <span className="text-gray-300">
+                              Perception: +{item.item.perception}
+                              {item.item.perceptionPercent &&
+                                ` (+${Math.round(
+                                  item.item.perceptionPercent * 100
+                                )}%)`}
+                            </span>
+                          </div>
+                        )}
+                        {item.item.health && (
+                          <div className="flex items-center space-x-2 text-sm">
+                            <Heart className="h-4 w-4 text-red-400" />
+                            <span className="text-gray-300">
+                              Health: +{item.item.health}
                             </span>
                           </div>
                         )}
@@ -264,6 +325,66 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                           </div>
                         )}
                       </div>
+
+                      {/* Equipment Slot */}
+                      {item.item.equipmentSlot && (
+                        <div className="mt-2 text-xs text-gray-400">
+                          Slot: {item.item.equipmentSlot}
+                        </div>
+                      )}
+
+                      {/* Requirements */}
+                      {item.item.equipmentSlot && character && (
+                        <div className="mt-2">
+                          {(() => {
+                            const requirements = formatItemRequirements(
+                              item.item
+                            );
+                            const meetsReqs = meetsRequirements(
+                              character,
+                              item.item
+                            );
+
+                            if (requirements.length > 0) {
+                              return (
+                                <div className="space-y-1">
+                                  <p className="text-xs text-gray-400">
+                                    Requirements:
+                                  </p>
+                                  {requirements.map((req, index) => (
+                                    <p
+                                      key={index}
+                                      className={`text-xs ${getRequirementClass(
+                                        meetsReqs.meets
+                                      )}`}
+                                    >
+                                      {req}
+                                    </p>
+                                  ))}
+                                </div>
+                              );
+                            }
+                            return null;
+                          })()}
+                        </div>
+                      )}
+
+                      {/* Equip/Unequip Button */}
+                      {item.item.equipmentSlot && (
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            className="w-full"
+                            disabled={toggleEquipMutation.isPending}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleToggleEquip(item);
+                            }}
+                          >
+                            {item.equipped ? "Unequip" : "Equip"}
+                          </Button>
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -312,12 +433,25 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                         {selectedItem.item.value} gold
                       </span>
                     </div>
+                    {selectedItem.item.equipmentSlot && (
+                      <div className="flex items-center space-x-2">
+                        <Package className="h-5 w-5 text-gray-400" />
+                        <span className="text-gray-300">Slot:</span>
+                        <span className="text-gray-400 font-semibold">
+                          {selectedItem.item.equipmentSlot}
+                        </span>
+                      </div>
+                    )}
                     {selectedItem.item.attack && (
                       <div className="flex items-center space-x-2">
                         <Sword className="h-5 w-5 text-orange-400" />
                         <span className="text-gray-300">Attack:</span>
                         <span className="text-orange-400 font-semibold">
                           +{selectedItem.item.attack}
+                          {selectedItem.item.attackPercent &&
+                            ` (+${Math.round(
+                              selectedItem.item.attackPercent * 100
+                            )}%)`}
                         </span>
                       </div>
                     )}
@@ -327,6 +461,45 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                         <span className="text-gray-300">Defense:</span>
                         <span className="text-blue-400 font-semibold">
                           +{selectedItem.item.defense}
+                          {selectedItem.item.defensePercent &&
+                            ` (+${Math.round(
+                              selectedItem.item.defensePercent * 100
+                            )}%)`}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItem.item.speed && (
+                      <div className="flex items-center space-x-2">
+                        <Zap className="h-5 w-5 text-green-400" />
+                        <span className="text-gray-300">Speed:</span>
+                        <span className="text-green-400 font-semibold">
+                          +{selectedItem.item.speed}
+                          {selectedItem.item.speedPercent &&
+                            ` (+${Math.round(
+                              selectedItem.item.speedPercent * 100
+                            )}%)`}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItem.item.perception && (
+                      <div className="flex items-center space-x-2">
+                        <Eye className="h-5 w-5 text-purple-400" />
+                        <span className="text-gray-300">Perception:</span>
+                        <span className="text-purple-400 font-semibold">
+                          +{selectedItem.item.perception}
+                          {selectedItem.item.perceptionPercent &&
+                            ` (+${Math.round(
+                              selectedItem.item.perceptionPercent * 100
+                            )}%)`}
+                        </span>
+                      </div>
+                    )}
+                    {selectedItem.item.health && (
+                      <div className="flex items-center space-x-2">
+                        <Heart className="h-5 w-5 text-red-400" />
+                        <span className="text-gray-300">Health:</span>
+                        <span className="text-red-400 font-semibold">
+                          +{selectedItem.item.health}
                         </span>
                       </div>
                     )}
@@ -341,6 +514,47 @@ export function Inventory({ isOpen, onClose }: InventoryProps) {
                     )}
                   </div>
                 </div>
+
+                {/* Requirements */}
+                {selectedItem.item.equipmentSlot && character && (
+                  <div className="bg-gray-800/50 rounded-lg p-4 mb-6">
+                    <h3 className="text-lg font-semibold text-white mb-3">
+                      Requirements
+                    </h3>
+                    {(() => {
+                      const requirements = formatItemRequirements(
+                        selectedItem.item
+                      );
+                      const meetsReqs = meetsRequirements(
+                        character,
+                        selectedItem.item
+                      );
+
+                      if (requirements.length > 0) {
+                        return (
+                          <div className="space-y-2">
+                            {requirements.map((req, index) => (
+                              <div
+                                key={index}
+                                className={`flex items-center space-x-2 ${getRequirementClass(
+                                  meetsReqs.meets
+                                )}`}
+                              >
+                                <span className="text-sm">{req}</span>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      } else {
+                        return (
+                          <p className="text-gray-400 text-sm">
+                            No special requirements
+                          </p>
+                        );
+                      }
+                    })()}
+                  </div>
+                )}
               </div>
 
               <div className="flex space-x-4">

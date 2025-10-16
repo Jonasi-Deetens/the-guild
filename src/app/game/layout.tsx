@@ -21,6 +21,7 @@ import {
   Package,
   BarChart3,
   Handshake,
+  Shield,
 } from "@/components/icons";
 import { api } from "@/trpc/react";
 import { LevelUpNotification } from "@/components/game/LevelUpNotification";
@@ -318,6 +319,12 @@ export default function GameLayout({ children }: GameLayoutProps) {
               <Package className="h-4 w-4 mr-2" />
               Inventory
             </Button>
+            <Link href="/game/equipment">
+              <Button variant="ghost" className="w-full justify-start">
+                <Shield className="h-4 w-4 mr-2" />
+                Equipment
+              </Button>
+            </Link>
             <Button
               variant="ghost"
               className="w-full justify-start"

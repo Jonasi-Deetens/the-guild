@@ -6,6 +6,8 @@ import {
 } from "@/server/context";
 import { statisticsService } from "@/server/services/statisticsService";
 import { GoldService } from "@/server/services/goldService";
+import { EquipmentService } from "@/server/services/equipmentService";
+import { EquipmentSlot } from "@prisma/client";
 import {
   getStatPointsPerLevel,
   validateStatAllocations,
@@ -419,37 +421,36 @@ export const characterRouter = createTRPCRouter({
 
       const { item } = inventoryItem;
 
-      // Only weapons and armor can be equipped
-      if (item.type !== "WEAPON" && item.type !== "ARMOR") {
+      // Check if item can be equipped
+      if (!item.equipmentSlot) {
         throw new Error("This item cannot be equipped");
       }
 
-      // If equipping, unequip other items of the same type
-      if (!inventoryItem.equipped) {
-        await ctx.db.inventory.updateMany({
-          where: {
-            characterId: inventoryItem.characterId,
-            item: { type: item.type },
-            equipped: true,
-          },
-          data: { equipped: false },
-        });
+      if (inventoryItem.equipped) {
+        // Unequip the item
+        await EquipmentService.unequipItem(
+          inventoryItem.characterId,
+          item.equipmentSlot
+        );
+        return {
+          success: true,
+          message: `Unequipped ${item.name}`,
+          equipped: false,
+        };
+      } else {
+        // Equip the item
+        const result = await EquipmentService.equipItem(
+          inventoryItem.characterId,
+          item.id
+        );
+        if (!result.success) {
+          throw new Error(result.message);
+        }
+        return {
+          ...result,
+          equipped: true,
+        };
       }
-
-      // Toggle equipped status
-      const updatedItem = await ctx.db.inventory.update({
-        where: { id: input.inventoryId },
-        data: { equipped: !inventoryItem.equipped },
-        include: { item: true },
-      });
-
-      return {
-        success: true,
-        message: `${updatedItem.equipped ? "Equipped" : "Unequipped"} ${
-          item.name
-        }`,
-        equipped: updatedItem.equipped,
-      };
     }),
 
   // Give starting items to new character
@@ -680,5 +681,63 @@ export const characterRouter = createTRPCRouter({
       pendingStatPoints: character.pendingStatPoints,
       isMaxLevel: character.level >= getMaxLevel(),
     };
+  }),
+
+  // Equipment-related endpoints
+  equipItem: protectedProcedure
+    .input(z.object({ itemId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      return await EquipmentService.equipItem(character.id, input.itemId);
+    }),
+
+  unequipItem: protectedProcedure
+    .input(z.object({ slot: z.nativeEnum(EquipmentSlot) }))
+    .mutation(async ({ ctx, input }) => {
+      const character = await ctx.db.character.findUnique({
+        where: { userId: ctx.session.user.id },
+        select: { id: true },
+      });
+
+      if (!character) {
+        throw new Error("Character not found");
+      }
+
+      await EquipmentService.unequipItem(character.id, input.slot);
+      return { success: true, message: "Item unequipped successfully" };
+    }),
+
+  getEquipment: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    return await EquipmentService.getEquippedItems(character.id);
+  }),
+
+  getCalculatedStats: protectedProcedure.query(async ({ ctx }) => {
+    const character = await ctx.db.character.findUnique({
+      where: { userId: ctx.session.user.id },
+      select: { id: true },
+    });
+
+    if (!character) {
+      throw new Error("Character not found");
+    }
+
+    return await EquipmentService.calculateStats(character.id);
   }),
 });
